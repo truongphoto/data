@@ -223,3 +223,17 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .mobile-focus-button.focus-api-limited{opacity:.8}
   .mobile-camera-shutter.camera-settling{opacity:.74;filter:saturate(.78)}
 }
+
+
+/* ================================================================
+   V1.2.29 - Chọn camera/zoom realtime Android/PWA. OCR/rule không đổi.
+   ================================================================ */
+@media(max-width:760px){
+  .mobile-camera-chooser{position:absolute;left:50%;bottom:108px;transform:translateX(-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:7px;max-width:94vw;pointer-events:auto}
+  .mobile-lens-buttons,.mobile-zoom-buttons{display:flex;align-items:center;justify-content:center;gap:7px;padding:5px 7px;border-radius:999px;background:rgba(0,0,0,.40);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);max-width:94vw;overflow-x:auto;scrollbar-width:none}
+  .mobile-lens-buttons:empty,.mobile-zoom-buttons[hidden]{display:none}
+  .mobile-lens-buttons::-webkit-scrollbar,.mobile-zoom-buttons::-webkit-scrollbar{display:none}
+  .mobile-lens-btn,.mobile-zoom-btn{min-width:46px;height:38px;padding:0 12px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(12,18,20,.62);color:#fff;font-size:13px;font-weight:900;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+  .mobile-lens-btn.active,.mobile-zoom-btn.active{background:#fff;color:#0f766e;border-color:#fff;box-shadow:0 0 0 2px rgba(15,118,110,.34)}
+  .mobile-lens-btn.switching{opacity:.62}
+}

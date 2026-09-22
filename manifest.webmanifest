@@ -1,5 +1,5 @@
 {
-  "name": "GPP Data Entry Lite V1.2.28",
+  "name": "GPP Data Entry Lite V1.2.29",
   "short_name": "GPP Data",
   "lang": "vi",
   "start_url": "./index.html",
@@ -8,7 +8,7 @@
   "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#0f766e",
-  "description": "Nhập hồ sơ dược bằng OCR tiếng Việt; giữ nguyên nhận dạng V1.2.23; Giữ nguyên OCR/rule V1.2.27; bổ sung autofocus liên tục, chạm lấy nét và nút lấy nét lại trên camera Android/PWA.",
+  "description": "Nhập hồ sơ dược bằng OCR tiếng Việt; giữ nguyên nhận dạng V1.2.23; Giữ nguyên OCR/rule V1.2.27; giữ autofocus V1.2.28; bổ sung chọn camera và zoom realtime trên khung chụp Android/PWA.",
   "icons": [
     {
       "src": "assets/icon-192.png",

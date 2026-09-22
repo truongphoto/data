@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.28
+/* GPP Data Entry Lite V1.2.29
    Nền OCR/rule khóa nguyên V1.2.27.
-   V1.2.28 chỉ bổ sung điều khiển lấy nét camera Android/PWA; không thay OCR/rule/hồ sơ/chia sẻ.
+   V1.2.29 giữ nguyên lấy nét V1.2.28 và bổ sung chọn camera/zoom realtime Android/PWA; không thay OCR/rule/hồ sơ/chia sẻ.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1880,8 +1880,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 const MOBILE_CAPTURE_ORDER=['cchnd','gpkd','bang','ddkkdd','gpp'];
 let mobileCameraStream=null,mobileCaptureIndex=0,mobileSingleDoc=null,deferredInstallPrompt=null,pwaRegistration=null;
 let mobileCaptureBusy=false,mobileCameraSettlingUntil=0,mobileSettleTimer=null,mobileFocusRun=0,mobileFocusCapabilities=null;
+let mobileVideoDevices=[],mobileCameraSwitchRun=0,mobileZoomRange=null,mobileCurrentCameraId='';
 const MOBILE_SETTINGS_KEY='gpp_mobile_settings_v1219';
-let mobileSettings=(()=>{try{return {autoCrop:true,sound:true,vibration:true,...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true,sound:true,vibration:true}}})();
+let mobileSettings=(()=>{try{return {autoCrop:true,sound:true,vibration:true,cameraId:'',...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true,sound:true,vibration:true,cameraId:''}}})();
 let shutterAudioContext=null;
 function saveMobileSettings(){try{localStorage.setItem(MOBILE_SETTINGS_KEY,JSON.stringify(mobileSettings))}catch(e){}}
 function syncMobileSettingsUI(){
@@ -2034,8 +2035,88 @@ function handleMobileTapFocus(e){
   const point=mapClientToVideoPoint(e.clientX,e.clientY);if(!point)return;
   refocusMobileCamera(point,{clientPoint:{x:e.clientX,y:e.clientY}}).catch(()=>{});
 }
+function normalizeCameraLabel(label=''){return String(label||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function isFrontCameraLabel(label=''){
+  const n=normalizeCameraLabel(label);return /\b(front|user|selfie|facetime|mặt trước|mat truoc)\b/.test(n);
+}
+function isBackCameraLabel(label=''){
+  const n=normalizeCameraLabel(label);return /\b(back|rear|environment|mặt sau|mat sau)\b/.test(n);
+}
+function semanticLensLabel(label=''){
+  const n=normalizeCameraLabel(label);
+  if(/ultra\s*-?\s*wide|ultrawide|0[.,]?5x|0[.,]?6x/.test(n))return '0.6x';
+  if(/telephoto|tele\b|optical\s*zoom|\b2x\b/.test(n))return '2x';
+  if(/main|primary|standard|wide\b/.test(n)&&!/ultra/.test(n))return '1x';
+  return '';
+}
+function cameraButtonLabels(cameras){
+  const proposed=cameras.map(c=>semanticLensLabel(c.label));
+  const seen=new Set();
+  return cameras.map((c,i)=>{
+    const p=proposed[i];if(p&&!seen.has(p)){seen.add(p);return p;}
+    return `Cam ${i+1}`;
+  });
+}
+function renderMobileCameraChoices(){
+  const host=$('#mobileLensButtons');if(!host)return;
+  host.innerHTML='';
+  const cams=mobileVideoDevices||[];const labels=cameraButtonLabels(cams);
+  cams.forEach((cam,i)=>{
+    const b=document.createElement('button');b.type='button';b.className='mobile-lens-btn';b.textContent=labels[i];b.title=cam.label||`Camera ${i+1}`;
+    b.dataset.deviceId=cam.deviceId;b.classList.toggle('active',cam.deviceId===mobileCurrentCameraId);
+    b.onclick=()=>switchMobileCameraDevice(cam.deviceId,b);
+    host.appendChild(b);
+  });
+  // Nếu Chrome chỉ expose một camera logic, vẫn hiện 1 nút để người dùng biết camera hiện hành.
+  if(!cams.length){const b=document.createElement('button');b.type='button';b.className='mobile-lens-btn active';b.textContent='1x';b.disabled=true;host.appendChild(b);}
+}
+function readMobileZoomRange(track=getMobileCameraTrack()){
+  if(!track)return null;let caps={};try{caps=track.getCapabilities?.()||{}}catch(e){}
+  const z=caps.zoom;if(!z||typeof z.min!=='number'||typeof z.max!=='number')return null;
+  return {min:z.min,max:z.max,step:typeof z.step==='number'&&z.step>0?z.step:0.1};
+}
+function renderMobileZoomChoices(){
+  const host=$('#mobileZoomButtons');if(!host)return;host.innerHTML='';
+  const range=mobileZoomRange=readMobileZoomRange();if(!range||range.max-range.min<0.05){host.hidden=true;return;}
+  let settings={};try{settings=getMobileCameraTrack()?.getSettings?.()||{}}catch(e){}
+  const current=typeof settings.zoom==='number'?settings.zoom:range.min;
+  const candidates=[0.6,1,2,3,5].filter(v=>v>=range.min-1e-6&&v<=range.max+1e-6);
+  if(!candidates.some(v=>Math.abs(v-range.min)<.01))candidates.unshift(range.min);
+  const uniq=[...new Set(candidates.map(v=>Math.round(v*100)/100))].sort((a,b)=>a-b);
+  uniq.slice(0,5).forEach(v=>{
+    const b=document.createElement('button');b.type='button';b.className='mobile-zoom-btn';b.textContent=`${Number.isInteger(v)?v:v.toFixed(1)}x`;
+    b.classList.toggle('active',Math.abs(current-v)<Math.max(.06,range.step*1.2));b.onclick=()=>setMobileCameraZoom(v);host.appendChild(b);
+  });
+  host.hidden=host.children.length<2;
+}
+async function setMobileCameraZoom(value){
+  const track=getMobileCameraTrack(),range=mobileZoomRange||readMobileZoomRange(track);if(!track||!range)return false;
+  const z=Math.max(range.min,Math.min(range.max,Number(value)));setMobileCameraSettling(420);
+  let ok=false;try{await track.applyConstraints({advanced:[{zoom:z}]});ok=true}catch(e){try{await track.applyConstraints({zoom:z});ok=true}catch(err){console.warn('Zoom:',err)}}
+  if(ok){renderMobileZoomChoices();await configureMobileContinuousFocus().catch(()=>{});}return ok;
+}
+async function refreshMobileCameraDevices(){
+  if(!navigator.mediaDevices?.enumerateDevices)return [];
+  let list=[];try{list=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput')}catch(e){console.warn('enumerateDevices:',e);}
+  if(!list.length){mobileVideoDevices=[];renderMobileCameraChoices();return []}
+  const explicitBack=list.filter(d=>isBackCameraLabel(d.label));
+  const nonFront=list.filter(d=>!isFrontCameraLabel(d.label));
+  // Ưu tiên camera sau; nếu Chrome không cấp nhãn thì giữ toàn bộ để người dùng tự xem realtime.
+  mobileVideoDevices=explicitBack.length?explicitBack:(nonFront.length?nonFront:list);
+  renderMobileCameraChoices();return mobileVideoDevices;
+}
+async function switchMobileCameraDevice(deviceId,button=null){
+  if(!deviceId||deviceId===mobileCurrentCameraId)return;
+  const run=++mobileCameraSwitchRun;if(button)button.classList.add('switching');setMobileCameraSettling(750);
+  try{
+    await startMobileCameraStream(deviceId,{remember:true});
+    if(run!==mobileCameraSwitchRun)return;
+    toast('Đã đổi camera.');
+  }catch(e){console.warn('Đổi camera:',e);toast('Camera này không mở được. Giữ camera hiện tại.');}
+  finally{if(button)button.classList.remove('switching');}
+}
 function stopMobileCamera(){
-  mobileFocusRun++;mobileFocusCapabilities=null;mobileCameraSettlingUntil=0;if(mobileSettleTimer){clearTimeout(mobileSettleTimer);mobileSettleTimer=null;}
+  mobileFocusRun++;mobileFocusCapabilities=null;mobileZoomRange=null;mobileCameraSettlingUntil=0;if(mobileSettleTimer){clearTimeout(mobileSettleTimer);mobileSettleTimer=null;}
   if(mobileCameraStream){mobileCameraStream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});mobileCameraStream=null;}
   const v=$('#mobileCameraVideo');if(v){v.srcObject=null;}
   updateMobileShootAvailability();
@@ -2052,16 +2133,39 @@ function updateMobileCaptureLabels(){
   if($('#mobileCaptureDocName'))$('#mobileCaptureDocName').textContent=name;
   if($('#mobileCaptureCounter'))$('#mobileCaptureCounter').textContent=mobileSingleDoc?'Chụp bổ sung':`${mobileCaptureIndex+1}/${MOBILE_CAPTURE_ORDER.length}`;
 }
-async function startMobileCameraStream(){
+async function startMobileCameraStream(preferredDeviceId='',options={}){
   if(!navigator.mediaDevices?.getUserMedia)throw new Error('Trình duyệt chưa cho phép camera trực tiếp.');
   stopMobileCamera();
-  const video={facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}};
-  try{if(navigator.mediaDevices.getSupportedConstraints?.().focusMode)video.focusMode='continuous';}catch(e){}
-  const constraints={video,audio:false};
-  mobileCameraStream=await navigator.mediaDevices.getUserMedia(constraints);
+  const chosen=preferredDeviceId||mobileSettings.cameraId||'';
+  const makeVideo=(deviceId='')=>{
+    const video={width:{ideal:2560},height:{ideal:1920}};
+    if(deviceId)video.deviceId={exact:deviceId};else video.facingMode={ideal:'environment'};
+    try{if(navigator.mediaDevices.getSupportedConstraints?.().focusMode)video.focusMode='continuous';}catch(e){}
+    return video;
+  };
+  try{
+    mobileCameraStream=await navigator.mediaDevices.getUserMedia({video:makeVideo(chosen),audio:false});
+  }catch(e){
+    // deviceId lưu từ lần trước có thể thay đổi sau cập nhật trình duyệt/khởi động máy.
+    if(!chosen)throw e;
+    console.warn('Camera đã lưu không còn khả dụng, dùng camera sau mặc định:',e);
+    mobileCameraStream=await navigator.mediaDevices.getUserMedia({video:makeVideo(''),audio:false});
+    if(options.remember||mobileSettings.cameraId===chosen){mobileSettings.cameraId='';saveMobileSettings();}
+  }
   const v=$('#mobileCameraVideo');v.srcObject=mobileCameraStream;await v.play();
+  const track=getMobileCameraTrack();let settings={};try{settings=track?.getSettings?.()||{}}catch(e){}
+  mobileCurrentCameraId=settings.deviceId||chosen||'';
+  if(options.remember&&mobileCurrentCameraId){mobileSettings.cameraId=mobileCurrentCameraId;saveMobileSettings();}
   setMobileCameraSettling(650);
-  await configureMobileContinuousFocus();
+  await configureMobileContinuousFocus().catch(()=>{});
+  // Chỉ sau khi người dùng cấp quyền Chrome mới thường trả label/deviceId đầy đủ.
+  await refreshMobileCameraDevices().catch(()=>{});
+  // Nếu camera hiện hành không nằm trong list đã lọc (một số máy label lạ), vẫn thêm nó để phản ánh đúng trạng thái.
+  if(mobileCurrentCameraId&&!mobileVideoDevices.some(d=>d.deviceId===mobileCurrentCameraId)){
+    let all=[];try{all=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput')}catch(e){}
+    const cur=all.find(d=>d.deviceId===mobileCurrentCameraId);if(cur){mobileVideoDevices=[cur,...mobileVideoDevices.filter(d=>d.deviceId!==cur.deviceId)];renderMobileCameraChoices();}
+  }else renderMobileCameraChoices();
+  renderMobileZoomChoices();
 }
 async function openMobileCamera(singleDoc=null){
   mobileSingleDoc=singleDoc;if(singleDoc)mobileCaptureIndex=Math.max(0,MOBILE_CAPTURE_ORDER.indexOf(singleDoc));
@@ -2144,6 +2248,7 @@ $('#btnPwaInstall').onclick=installPWA;
 $('#btnPwaUpdate').onclick=applyPWAUpdate;
 $('#mobileCameraFallback').onchange=e=>handleMobileFallback(e.target);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&document.body.classList.contains('mobile-camera-open')){/* Android có thể tạm ẩn app khi cấp quyền; không tự đóng camera. */}});
+if(navigator.mediaDevices?.addEventListener)navigator.mediaDevices.addEventListener('devicechange',()=>{if(document.body.classList.contains('mobile-camera-open'))refreshMobileCameraDevices().catch(()=>{});});
 // V1.2.19: tất cả nút trên điện thoại có phản hồi nhẹ; nút chụp dùng rung/âm thanh riêng.
 document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('button');if(!b||b.disabled)return;b.classList.add('tap-feedback');setTimeout(()=>b.classList.remove('tap-feedback'),130);},{passive:true});
 document.addEventListener('click',e=>{const b=e.target.closest?.('button');if(!b||b.disabled||b.id==='btnShootMobileDoc')return;lightHaptic(9);},{passive:true});

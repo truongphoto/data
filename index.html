@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.28</title>
+  <title>GPP Data Entry Lite V1.2.29</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -17,7 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.28: khóa toàn bộ OCR/rule V1.2.27; chỉ bổ sung điều khiển lấy nét camera trên điện thoại. -->
+  <!-- V1.2.29: khóa toàn bộ OCR/rule V1.2.27; giữ lấy nét V1.2.28 và bổ sung chọn camera/zoom realtime trên điện thoại. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
@@ -40,6 +40,10 @@
       <div id="mobileCaptureCounter" class="mobile-capture-counter">1/5</div>
       <button id="btnMobileCaptureSettings" class="mobile-camera-icon mobile-camera-settings" type="button" aria-label="Cài đặt">⚙</button>
     </div>
+    <div id="mobileCameraChooser" class="mobile-camera-chooser" aria-label="Chọn camera và zoom">
+      <div id="mobileLensButtons" class="mobile-lens-buttons"></div>
+      <div id="mobileZoomButtons" class="mobile-zoom-buttons" hidden></div>
+    </div>
     <div class="mobile-capture-bottom">
       <button id="btnSkipMobileDoc" class="mobile-camera-secondary" type="button">Bỏ qua</button>
       <button id="btnShootMobileDoc" class="mobile-camera-shutter" type="button">
@@ -54,7 +58,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.28</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.29</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
