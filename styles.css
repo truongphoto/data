@@ -208,3 +208,18 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .record-image-viewer-stage{padding:6px}
   .record-image-viewer-stage img{max-width:100%;max-height:100%}
 }
+
+
+/* ================================================================
+   V1.2.28 - Lấy nét camera Android/PWA. Không thay OCR/rule/layout PC.
+   ================================================================ */
+@media(max-width:760px){
+  .mobile-focus-ring{position:absolute;width:66px;height:66px;margin-left:-33px;margin-top:-33px;border:2px solid #ffe66d;border-radius:12px;opacity:0;pointer-events:none;z-index:5;box-shadow:0 0 0 1px rgba(0,0,0,.25),0 0 18px rgba(255,230,109,.2);transform:scale(1.18);transition:opacity .16s ease,transform .18s ease,border-color .16s ease}
+  .mobile-focus-ring.show{opacity:1;transform:scale(1)}
+  .mobile-focus-ring.done{border-color:#5eead4}
+  .mobile-focus-ring.unsupported{border-color:#fff;opacity:.7}
+  .mobile-focus-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10px;line-height:1.05}
+  .mobile-focus-symbol{font-size:25px;line-height:24px;font-weight:400}
+  .mobile-focus-button.focus-api-limited{opacity:.8}
+  .mobile-camera-shutter.camera-settling{opacity:.74;filter:saturate(.78)}
+}

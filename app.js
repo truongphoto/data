@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.27
-   Nền OCR/rule giữ nguyên V1.2.24.
-   V1.2.27 giữ nguyên toàn bộ V1.2.26; Chia sẻ hồ sơ chỉ gửi CSV + ảnh, bỏ TXT theo yêu cầu người dùng.
+/* GPP Data Entry Lite V1.2.28
+   Nền OCR/rule khóa nguyên V1.2.27.
+   V1.2.28 chỉ bổ sung điều khiển lấy nét camera Android/PWA; không thay OCR/rule/hồ sơ/chia sẻ.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1879,6 +1879,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
    ================================================================ */
 const MOBILE_CAPTURE_ORDER=['cchnd','gpkd','bang','ddkkdd','gpp'];
 let mobileCameraStream=null,mobileCaptureIndex=0,mobileSingleDoc=null,deferredInstallPrompt=null,pwaRegistration=null;
+let mobileCaptureBusy=false,mobileCameraSettlingUntil=0,mobileSettleTimer=null,mobileFocusRun=0,mobileFocusCapabilities=null;
 const MOBILE_SETTINGS_KEY='gpp_mobile_settings_v1219';
 let mobileSettings=(()=>{try{return {autoCrop:true,sound:true,vibration:true,...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true,sound:true,vibration:true}}})();
 let shutterAudioContext=null;
@@ -1946,9 +1947,98 @@ async function registerPWAUpdateFlow(){
     pwaRegistration.update().catch(()=>{});
   }catch(e){console.warn('PWA:',e);}
 }
+function getMobileCameraTrack(){return mobileCameraStream?.getVideoTracks?.()[0]||null;}
+function setMobileCameraSettling(ms=520){
+  mobileCameraSettlingUntil=Math.max(mobileCameraSettlingUntil,Date.now()+Math.max(0,ms||0));
+  if(mobileSettleTimer)clearTimeout(mobileSettleTimer);
+  updateMobileShootAvailability();
+  mobileSettleTimer=setTimeout(()=>{mobileSettleTimer=null;updateMobileShootAvailability();},Math.max(20,mobileCameraSettlingUntil-Date.now()+15));
+}
+function updateMobileShootAvailability(){
+  const btn=$('#btnShootMobileDoc');if(!btn)return;
+  const settling=Date.now()<mobileCameraSettlingUntil;
+  btn.disabled=!!mobileCaptureBusy||settling||!getMobileCameraTrack();
+  btn.classList.toggle('camera-settling',settling&&!mobileCaptureBusy);
+}
+function getMobileFocusCapabilities(track=getMobileCameraTrack()){
+  if(!track)return {focus:false,point:false,continuous:false,single:false};
+  let caps={},supported={};
+  try{caps=track.getCapabilities?.()||{}}catch(e){}
+  try{supported=navigator.mediaDevices?.getSupportedConstraints?.()||{}}catch(e){}
+  const modes=Array.isArray(caps.focusMode)?caps.focusMode:[];
+  return {
+    focus:!!(supported.focusMode||modes.length),
+    point:!!(supported.pointsOfInterest||caps.pointsOfInterest),
+    continuous:modes.includes('continuous')||(!modes.length&&!!supported.focusMode),
+    single:modes.includes('single-shot')||(!modes.length&&!!supported.focusMode)
+  };
+}
+async function applyMobileTrackConstraints(track,extra){
+  if(!track?.applyConstraints)return false;
+  let base={};try{base=track.getConstraints?.()||{}}catch(e){}
+  // Giữ lại mọi ràng buộc hiện có (deviceId/facingMode/kích thước), chỉ bổ sung phần lấy nét.
+  const next={...base,...extra};
+  try{await track.applyConstraints(next);return true}catch(e){console.warn('Focus constraints:',e);return false;}
+}
+function mapClientToVideoPoint(clientX,clientY){
+  const v=$('#mobileCameraVideo');if(!v||!v.videoWidth||!v.videoHeight)return null;
+  const vr=v.getBoundingClientRect(),vw=v.videoWidth,vh=v.videoHeight;
+  const scale=Math.max(vr.width/vw,vr.height/vh),shownW=vw*scale,shownH=vh*scale;
+  const ox=vr.left+(vr.width-shownW)/2,oy=vr.top+(vr.height-shownH)/2;
+  return {x:Math.max(0,Math.min(vw-1,(clientX-ox)/scale)),y:Math.max(0,Math.min(vh-1,(clientY-oy)/scale))};
+}
+function showMobileFocusRing(clientX,clientY,state='working'){
+  const cap=$('#mobileCapture'),ring=$('#mobileFocusRing');if(!cap||!ring)return;
+  const r=cap.getBoundingClientRect();ring.style.left=`${clientX-r.left}px`;ring.style.top=`${clientY-r.top}px`;
+  ring.classList.remove('show','done','unsupported');void ring.offsetWidth;ring.classList.add('show');
+  if(state==='done')ring.classList.add('done');if(state==='unsupported')ring.classList.add('unsupported');
+  clearTimeout(ring._hideTimer);ring._hideTimer=setTimeout(()=>ring.classList.remove('show','done','unsupported'),850);
+}
+function centerClientPointForFocus(){
+  const frame=$('#mobileCaptureFrame'),v=$('#mobileCameraVideo');const r=(frame||v)?.getBoundingClientRect?.();
+  return r?{x:r.left+r.width/2,y:r.top+r.height/2}:null;
+}
+async function configureMobileContinuousFocus(){
+  const track=getMobileCameraTrack();if(!track)return false;
+  mobileFocusCapabilities=getMobileFocusCapabilities(track);
+  const btn=$('#btnMobileRefocus');if(btn){btn.classList.toggle('focus-api-limited',!mobileFocusCapabilities.focus);btn.title=mobileFocusCapabilities.focus?'Chạm để lấy nét lại':'Camera đang dùng tự động lấy nét của hệ thống';}
+  if(!mobileFocusCapabilities.continuous)return false;
+  const ok=await applyMobileTrackConstraints(track,{focusMode:'continuous'});
+  if(ok)setMobileCameraSettling(520);
+  return ok;
+}
+async function refocusMobileCamera(point=null,{notify=false,clientPoint=null}={}){
+  const track=getMobileCameraTrack();if(!track)return false;
+  const run=++mobileFocusRun,caps=mobileFocusCapabilities||getMobileFocusCapabilities(track);mobileFocusCapabilities=caps;
+  const cp=clientPoint||centerClientPointForFocus();if(cp)showMobileFocusRing(cp.x,cp.y,'working');
+  setMobileCameraSettling(560);
+  let ok=false;
+  // Ưu tiên lấy nét một lần tại điểm người dùng chạm; nếu máy không hỗ trợ điểm lấy nét thì vẫn kích hoạt autofocus.
+  if(caps.focus){
+    const extra={};
+    if(caps.single)extra.focusMode='single-shot';else if(caps.continuous)extra.focusMode='continuous';
+    if(point&&caps.point)extra.pointsOfInterest=[{x:Math.round(point.x),y:Math.round(point.y)}];
+    ok=await applyMobileTrackConstraints(track,extra);
+    if(ok&&run===mobileFocusRun){
+      await new Promise(r=>setTimeout(r,360));
+      if(caps.continuous)await applyMobileTrackConstraints(track,{focusMode:'continuous'});
+    }
+  }
+  if(cp)showMobileFocusRing(cp.x,cp.y,ok?'done':'unsupported');
+  if(notify)toast(ok?'Đã yêu cầu camera lấy nét lại.':'Camera này tự lấy nét bằng hệ thống.');
+  return ok;
+}
+function handleMobileTapFocus(e){
+  if(!document.body.classList.contains('mobile-camera-open'))return;
+  if(e.target?.closest?.('button,.mobile-capture-top,.mobile-capture-bottom'))return;
+  const point=mapClientToVideoPoint(e.clientX,e.clientY);if(!point)return;
+  refocusMobileCamera(point,{clientPoint:{x:e.clientX,y:e.clientY}}).catch(()=>{});
+}
 function stopMobileCamera(){
+  mobileFocusRun++;mobileFocusCapabilities=null;mobileCameraSettlingUntil=0;if(mobileSettleTimer){clearTimeout(mobileSettleTimer);mobileSettleTimer=null;}
   if(mobileCameraStream){mobileCameraStream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});mobileCameraStream=null;}
   const v=$('#mobileCameraVideo');if(v){v.srcObject=null;}
+  updateMobileShootAvailability();
 }
 function closeMobileCamera(showMain=true){
   stopMobileCamera();document.body.classList.remove('mobile-camera-open');
@@ -1965,9 +2055,13 @@ function updateMobileCaptureLabels(){
 async function startMobileCameraStream(){
   if(!navigator.mediaDevices?.getUserMedia)throw new Error('Trình duyệt chưa cho phép camera trực tiếp.');
   stopMobileCamera();
-  const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}},audio:false};
+  const video={facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}};
+  try{if(navigator.mediaDevices.getSupportedConstraints?.().focusMode)video.focusMode='continuous';}catch(e){}
+  const constraints={video,audio:false};
   mobileCameraStream=await navigator.mediaDevices.getUserMedia(constraints);
   const v=$('#mobileCameraVideo');v.srcObject=mobileCameraStream;await v.play();
+  setMobileCameraSettling(650);
+  await configureMobileContinuousFocus();
 }
 async function openMobileCamera(singleDoc=null){
   mobileSingleDoc=singleDoc;if(singleDoc)mobileCaptureIndex=Math.max(0,MOBILE_CAPTURE_ORDER.indexOf(singleDoc));
@@ -2003,7 +2097,7 @@ function frameCropToFile(){
 async function shootMobileDocument(){
   const k=mobileSingleDoc||MOBILE_CAPTURE_ORDER[mobileCaptureIndex];if(!k)return;
   playShutterFeedback();
-  const btn=$('#btnShootMobileDoc');if(btn)btn.disabled=true;
+  const btn=$('#btnShootMobileDoc');mobileCaptureBusy=true;updateMobileShootAvailability();
   try{
     const file=await frameCropToFile();await processImage(k,file);
     if(mobileSingleDoc){closeMobileCamera(true);toast(`Đã chụp ${DOCS[k].name}.`);return;}
@@ -2011,7 +2105,7 @@ async function shootMobileDocument(){
     if(mobileCaptureIndex>=MOBILE_CAPTURE_ORDER.length){closeMobileCamera(true);toast('Đã hoàn tất lượt chụp hồ sơ. OCR tiếp tục xử lý ở nền.');return;}
     updateMobileCaptureLabels();
   }catch(e){console.error(e);toast(e.message||'Không chụp được ảnh.');}
-  finally{if(btn)btn.disabled=false;}
+  finally{mobileCaptureBusy=false;updateMobileShootAvailability();}
 }
 function skipMobileDocument(){
   if(mobileSingleDoc){closeMobileCamera(true);return;}
@@ -2040,6 +2134,8 @@ $('#btnMobileRecordsHome').onclick=async()=>{setMobileIntro(false);await openRec
 $('#btnMobileSound').onclick=toggleMobileSound;
 $('#btnMobileVibration').onclick=toggleMobileVibration;
 $('#btnMobileCaptureSettings').onclick=openSettingsModal;
+$('#btnMobileRefocus').onclick=()=>refocusMobileCamera(null,{notify:true}).catch(()=>toast('Không lấy nét lại được.'));
+$('#mobileCapture').addEventListener('pointerup',handleMobileTapFocus,{passive:true});
 $('#settingAutoCrop').onchange=e=>{mobileSettings.autoCrop=!!e.target.checked;saveMobileSettings();toast(mobileSettings.autoCrop?'Tự động crop: Bật':'Tự động crop: Tắt');};
 $('#btnCloseMobileCamera').onclick=()=>closeMobileCamera(true);
 $('#btnSkipMobileDoc').onclick=skipMobileDocument;

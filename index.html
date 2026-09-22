@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.27</title>
+  <title>GPP Data Entry Lite V1.2.28</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -17,7 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.27: giữ nguyên OCR/rule V1.2.25; giữ nguyên V1.2.26; Chia sẻ hồ sơ chỉ dùng CSV + ảnh, bỏ TXT. -->
+  <!-- V1.2.28: khóa toàn bộ OCR/rule V1.2.27; chỉ bổ sung điều khiển lấy nét camera trên điện thoại. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
@@ -34,6 +34,7 @@
   <section id="mobileCapture" class="mobile-capture" aria-hidden="true">
     <video id="mobileCameraVideo" autoplay playsinline muted></video>
     <div id="mobileCaptureFrame" class="mobile-capture-frame" aria-hidden="true"></div>
+    <div id="mobileFocusRing" class="mobile-focus-ring" aria-hidden="true"></div>
     <div class="mobile-capture-top">
       <button id="btnCloseMobileCamera" class="mobile-camera-icon" type="button" aria-label="Đóng camera">×</button>
       <div id="mobileCaptureCounter" class="mobile-capture-counter">1/5</div>
@@ -45,7 +46,7 @@
         <span>CHỤP</span>
         <strong id="mobileCaptureDocName">Chứng chỉ hành nghề dược</strong>
       </button>
-      <div class="mobile-camera-spacer" aria-hidden="true"></div>
+      <button id="btnMobileRefocus" class="mobile-camera-secondary mobile-focus-button" type="button" aria-label="Lấy nét lại"><span class="mobile-focus-symbol">◎</span><span>Lấy nét</span></button>
     </div>
   </section>
 
@@ -53,7 +54,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.27</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.28</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
