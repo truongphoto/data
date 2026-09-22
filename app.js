@@ -1545,9 +1545,12 @@ async function allRecords(){const d=await db();return new Promise((res,rej)=>{co
 async function getRecord(id){const d=await db();return new Promise((res,rej)=>{const r=d.transaction('records').objectStore('records').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function deleteRecord(id){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction('records','readwrite');tx.objectStore('records').delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
 
-/* V1.2.23 - quản lý dung lượng/ảnh hồ sơ lưu. Không thay đổi OCR/rule. */
+/* V1.2.24 - quản lý dung lượng/ảnh hồ sơ lưu. Không thay đổi OCR/rule. */
 const DOC_FILE_LABELS_V1223={cchnd:'CCHND',gpkd:'GPKD',bang:'BANG_TOT_NGHIEP',ddkkdd:'DDKKDD',gpp:'GPP'};
 let recordImagePreviewUrlsV1223=[];
+let recordImagePreviewUrlByKeyV1224=new Map();
+let recordImagesOpenIdV1224=null;
+let recordImageViewerKeyV1224=null;
 function recordImageEntriesV1223(raw){
   return Object.keys(DOCS).map(k=>({key:k,doc:raw?.documents?.[k]||null,blob:raw?.documents?.[k]?.blob||null})).filter(x=>x.blob instanceof Blob);
 }
@@ -1574,36 +1577,79 @@ function safeRecordStemV1223(raw){
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Ho_So';
   return ('GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)).replace(/_+$/,'')||'GPP_Ho_So';
 }
-function clearRecordImagePreviewUrlsV1223(){recordImagePreviewUrlsV1223.forEach(u=>{try{URL.revokeObjectURL(u)}catch(_e){}});recordImagePreviewUrlsV1223=[];}
-async function openSavedRecordImagesV1223(id){
-  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return;}
+function closeRecordImageViewerV1224(){
+  const viewer=$('#recordImageViewer'),img=$('#recordImageViewerImg');
+  recordImageViewerKeyV1224=null;
+  if(img)img.removeAttribute('src');
+  if(viewer)viewer.hidden=true;
+}
+function clearRecordImagePreviewUrlsV1223(){
+  closeRecordImageViewerV1224();
+  recordImagePreviewUrlsV1223.forEach(u=>{try{URL.revokeObjectURL(u)}catch(_e){}});
+  recordImagePreviewUrlsV1223=[];recordImagePreviewUrlByKeyV1224.clear();
+}
+function openRecordImageViewerV1224(key,entry){
+  const url=recordImagePreviewUrlByKeyV1224.get(key);if(!url||!entry)return;
+  recordImageViewerKeyV1224=key;
+  $('#recordImageViewerTitle').textContent=DOCS[key]?.name||key;
+  $('#recordImageViewerMeta').textContent=`${entry.doc?.name||'Ảnh hồ sơ'} • ${formatBytesV1223(entry.blob?.size||0)}`;
+  $('#recordImageViewerImg').src=url;
+  $('#recordImageViewer').hidden=false;
+}
+async function renderSavedRecordImagesV1224(id){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return false;}
+  recordImagesOpenIdV1224=id;
   clearRecordImagePreviewUrlsV1223();
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ';
   $('#recordImagesTitle').textContent=`Ảnh hồ sơ – ${name}`;
   const entries=recordImageEntriesV1223(raw),grid=$('#recordImagesGrid');grid.innerHTML='';
   $('#recordImagesSummary').textContent=`${entries.length} ảnh đang lưu • Dung lượng hồ sơ: ${formatBytesV1223(recordStorageBytesV1223(raw))}`;
-  if(!entries.length){grid.innerHTML='<div class="record-images-empty">Hồ sơ này không còn ảnh lưu trên thiết bị.</div>';openModal('recordImagesModal');return;}
+  const btnDeleteAll=$('#btnDeleteAllRecordImages');if(btnDeleteAll)btnDeleteAll.disabled=!entries.length;
+  if(!entries.length){grid.innerHTML='<div class="record-images-empty">Hồ sơ này không còn ảnh lưu trên thiết bị.</div>';return true;}
   entries.forEach(({key,doc,blob})=>{
-    const url=URL.createObjectURL(blob);recordImagePreviewUrlsV1223.push(url);
+    const url=URL.createObjectURL(blob);recordImagePreviewUrlsV1223.push(url);recordImagePreviewUrlByKeyV1224.set(key,url);
     const card=document.createElement('article');card.className='record-image-card';
-    card.innerHTML=`<h3>${esc(DOCS[key]?.name||key)}</h3><div class="record-image-frame"><img src="${url}" alt="${esc(DOCS[key]?.name||key)}" /></div><div class="record-image-meta"><span>${esc(doc?.name||'Ảnh hồ sơ')} • ${formatBytesV1223(blob.size||0)}</span><button class="btn small secondary" type="button" data-download-record-image="${key}">Tải ảnh</button></div>`;
+    card.innerHTML=`<h3>${esc(DOCS[key]?.name||key)}</h3><div class="record-image-frame" data-open-record-image="${key}" role="button" tabindex="0" aria-label="Mở toàn bộ ảnh ${esc(DOCS[key]?.name||key)}"><img src="${url}" alt="${esc(DOCS[key]?.name||key)}" /><span class="record-image-open-hint">Chạm để xem toàn bộ</span><button class="record-image-delete-label" type="button" data-delete-record-image="${key}">Xóa</button></div><div class="record-image-meta"><span>${esc(doc?.name||'Ảnh hồ sơ')} • ${formatBytesV1223(blob.size||0)}</span><button class="btn small secondary" type="button" data-download-record-image="${key}">Tải ảnh</button></div>`;
     grid.appendChild(card);
   });
+  grid.querySelectorAll('[data-open-record-image]').forEach(frame=>{
+    const open=()=>{const key=frame.dataset.openRecordImage,e=entries.find(x=>x.key===key);openRecordImageViewerV1224(key,e)};
+    frame.onclick=e=>{if(e.target.closest('[data-delete-record-image]'))return;open();};
+    frame.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
+  });
+  grid.querySelectorAll('[data-delete-record-image]').forEach(b=>b.onclick=async e=>{e.stopPropagation();await deleteOneSavedRecordImageV1224(id,b.dataset.deleteRecordImage);});
   grid.querySelectorAll('[data-download-record-image]').forEach(b=>b.onclick=()=>{
     const key=b.dataset.downloadRecordImage,e=entries.find(x=>x.key===key);if(!e)return;
     const ext=imageExtensionV1223(e.blob,e.doc?.name),file=new File([e.blob],`${DOC_FILE_LABELS_V1223[key]||key}.${ext}`,{type:e.blob.type||'image/jpeg'});downloadGeneratedFile(file);
   });
+  return true;
+}
+async function openSavedRecordImagesV1223(id){
+  if(!await renderSavedRecordImagesV1224(id))return;
+  const btnAll=$('#btnDeleteAllRecordImages'),btnCloseViewer=$('#btnCloseRecordImageViewer'),btnDeleteCurrent=$('#btnDeleteCurrentRecordImage');
+  if(btnAll)btnAll.onclick=async()=>{if(await deleteSavedRecordImagesV1223(id))await renderSavedRecordImagesV1224(id);};
+  if(btnCloseViewer)btnCloseViewer.onclick=()=>closeRecordImageViewerV1224();
+  if(btnDeleteCurrent)btnDeleteCurrent.onclick=async()=>{if(recordImageViewerKeyV1224)await deleteOneSavedRecordImageV1224(id,recordImageViewerKeyV1224);};
   openModal('recordImagesModal');
+}
+async function deleteOneSavedRecordImageV1224(id,key){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return false;}
+  const d=raw?.documents?.[key],blob=d?.blob;if(!(blob instanceof Blob)){toast('Ảnh này không còn trong hồ sơ.');return false;}
+  const label=DOCS[key]?.name||'ảnh này';
+  if(!confirm(`Xóa ${label} khỏi hồ sơ?\n\nDữ liệu OCR và nội dung hồ sơ vẫn được giữ nguyên.`))return false;
+  d.blob=null;d.imageDeletedAt=new Date().toISOString();raw.updatedAt=new Date().toISOString();await putRecord(raw);
+  if(state?.id===raw.id){state=hydrateState(raw);if(activeDoc===key){activeImage=null;currentEvidence=null;drawPreview(null,null);}renderDocuments();}
+  await renderRecords($('#searchRecords').value);await renderSavedRecordImagesV1224(id);toast(`Đã xóa ${label}, giải phóng ${formatBytesV1223(blob.size||0)}.`);return true;
 }
 async function deleteSavedRecordImagesV1223(id){
   const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return false;}
   const entries=recordImageEntriesV1223(raw);if(!entries.length){toast('Hồ sơ này không còn ảnh để xóa.');return false;}
   const freed=entries.reduce((n,x)=>n+Number(x.blob?.size||0),0);
-  if(!confirm(`Xóa ${entries.length} ảnh của hồ sơ này để giải phóng khoảng ${formatBytesV1223(freed)}?\n\nDữ liệu OCR, Ban hành và nội dung hồ sơ vẫn được giữ nguyên.`))return false;
+  if(!confirm(`Xóa toàn bộ ${entries.length} ảnh của hồ sơ này để giải phóng khoảng ${formatBytesV1223(freed)}?\n\nDữ liệu OCR, Ban hành và nội dung hồ sơ vẫn được giữ nguyên.`))return false;
   Object.keys(raw.documents||{}).forEach(k=>{const d=raw.documents[k];if(d?.blob instanceof Blob){d.blob=null;d.imageDeletedAt=new Date().toISOString();}});
   raw.updatedAt=new Date().toISOString();await putRecord(raw);
   if(state?.id===raw.id){state=hydrateState(raw);activeImage=null;currentEvidence=null;renderDocuments();drawPreview(null,null);}
-  await renderRecords($('#searchRecords').value);toast(`Đã xóa ảnh, giải phóng khoảng ${formatBytesV1223(freed)}.`);return true;
+  await renderRecords($('#searchRecords').value);toast(`Đã xóa toàn bộ ảnh, giải phóng khoảng ${formatBytesV1223(freed)}.`);return true;
 }
 async function makeRecordPackageV1223(raw){
   if(!raw)throw new Error('Không tìm thấy hồ sơ.');
@@ -1637,14 +1683,13 @@ async function renderRecords(q=''){
     const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';renderedSavedRecordById.set(String(r.id),raw);const tr=document.createElement('tr');
     const checked=selectedSavedRecordIds.has(r.id)?' checked':'';
     const sizeText=formatBytesV1223(recordStorageBytesV1223(raw));
-    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}<div class="record-size">Dung lượng hồ sơ: ${sizeText}</div></td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small images" data-images="${r.id}">Xem ảnh</button> <button class="btn small delete-images" data-delete-images="${r.id}">Xóa ảnh</button> <button class="btn small package" data-package="${r.id}">Tải gói</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
+    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}<div class="record-size">Dung lượng hồ sơ: ${sizeText}</div></td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small images" data-images="${r.id}">Xem ảnh</button> <button class="btn small package" data-package="${r.id}">Tải gói</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
   });
   body.querySelectorAll('[data-record-check]').forEach(ch=>ch.onchange=()=>{if(ch.checked)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);syncRecordSelectAll();});
   body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSavedRecord(b.dataset.open));
   body.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Xóa hồ sơ này khỏi thiết bị?')){selectedSavedRecordIds.delete(b.dataset.del);await deleteRecord(b.dataset.del);await renderRecords($('#searchRecords').value);toast('Đã xóa hồ sơ.')}});
   body.querySelectorAll('[data-excel]').forEach(b=>b.onclick=()=>exportSingleSavedRecord(b.dataset.excel));
   body.querySelectorAll('[data-images]').forEach(b=>b.onclick=()=>openSavedRecordImagesV1223(b.dataset.images));
-  body.querySelectorAll('[data-delete-images]').forEach(b=>b.onclick=()=>deleteSavedRecordImagesV1223(b.dataset.deleteImages));
   body.querySelectorAll('[data-package]').forEach(b=>b.onclick=()=>downloadRecordPackageV1223(b.dataset.package,b));
   body.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>shareSingleSavedRecord(renderedSavedRecordById.get(String(b.dataset.share)),b));
   syncRecordSelectAll();

@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.23</title>
+  <title>GPP Data Entry Lite V1.2.24</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -17,7 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.23: giữ nguyên OCR/rule V1.2.22; bổ sung dung lượng, xem/xóa ảnh và tải gói hồ sơ. -->
+  <!-- V1.2.24: giữ nguyên OCR/rule V1.2.23; cải tiến xem/xóa ảnh trong Hồ sơ lưu. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
@@ -53,7 +53,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.23</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.24</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
@@ -169,7 +169,7 @@
     </div>
   </div>
 
-  <!-- V1.2.23: xem ảnh đã lưu của một hồ sơ. -->
+  <!-- V1.2.24: gallery ảnh hồ sơ; mở ảnh toàn bộ và xóa ảnh ngay trong cửa sổ ảnh. -->
   <div id="recordImagesModal" class="modal" aria-hidden="true">
     <div class="modal-card record-images-window">
       <div class="modal-header">
@@ -178,10 +178,26 @@
           <p id="recordImagesSummary">Các ảnh đang được lưu trong hồ sơ.</p>
         </div>
         <div class="modal-actions">
+          <button id="btnDeleteAllRecordImages" class="btn danger" type="button">Xóa toàn bộ ảnh</button>
           <button class="btn secondary" data-close-modal="recordImagesModal">Đóng</button>
         </div>
       </div>
       <div id="recordImagesGrid" class="record-images-grid"></div>
+      <div id="recordImageViewer" class="record-image-viewer" hidden>
+        <div class="record-image-viewer-bar">
+          <div>
+            <strong id="recordImageViewerTitle">Ảnh hồ sơ</strong>
+            <span id="recordImageViewerMeta"></span>
+          </div>
+          <div class="record-image-viewer-actions">
+            <button id="btnDeleteCurrentRecordImage" class="btn danger" type="button">Xóa ảnh này</button>
+            <button id="btnCloseRecordImageViewer" class="btn secondary" type="button">Đóng</button>
+          </div>
+        </div>
+        <div class="record-image-viewer-stage">
+          <img id="recordImageViewerImg" alt="Ảnh hồ sơ đang xem" />
+        </div>
+      </div>
     </div>
   </div>
 

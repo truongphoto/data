@@ -1,4 +1,4 @@
-const CACHE='gpp-data-entry-v1-2-23-static';
+const CACHE='gpp-data-entry-v1-2-24-static';
 const LOCAL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./assets/logo-full.jpg','./assets/favicon.png','./assets/apple-touch-icon.png','./assets/icon-192.png','./assets/icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(LOCAL))));
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('gpp-data-entry-')).map(k=>caches.delete(k))))])));

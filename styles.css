@@ -175,3 +175,33 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .record-row-actions .btn{margin-bottom:4px}
   .record-size{font-size:9.5px;white-space:normal}
 }
+
+
+/* ================================================================
+   V1.2.24 - gallery ảnh hồ sơ: thumbnail -> xem toàn bộ -> xóa trong cửa sổ.
+   Không đổi OCR/rule.
+   ================================================================ */
+.record-images-window{position:relative}
+.record-image-frame{position:relative;cursor:zoom-in}
+.record-image-frame:focus{outline:3px solid rgba(15,118,110,.25);outline-offset:-3px}
+.record-image-open-hint{position:absolute;left:8px;bottom:8px;padding:5px 8px;border-radius:999px;background:rgba(15,23,42,.72);color:#fff;font-size:10px;font-weight:800;pointer-events:none}
+.record-image-delete-label{position:absolute;right:8px;top:8px;border:0;border-radius:8px;padding:6px 9px;background:rgba(220,38,38,.92);color:#fff;font:700 11px/1 inherit;cursor:pointer;box-shadow:0 2px 8px rgba(15,23,42,.25)}
+.record-image-delete-label:hover{background:#b91c1c}
+.record-image-viewer[hidden]{display:none!important}
+.record-image-viewer{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;background:#0b1220}
+.record-image-viewer-bar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:#fff;border-bottom:1px solid #dbe4e8}
+.record-image-viewer-bar>div:first-child{min-width:0;display:flex;flex-direction:column;gap:2px}
+.record-image-viewer-bar strong{font-size:14px;color:#173a38;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.record-image-viewer-bar span{font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.record-image-viewer-actions{display:flex;gap:7px;flex:0 0 auto}
+.record-image-viewer-stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:auto;padding:10px;background:#0b1220}
+.record-image-viewer-stage img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+#btnDeleteAllRecordImages:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:760px){
+  .record-image-frame{height:240px;cursor:pointer}
+  .record-image-open-hint{font-size:9.5px}
+  .record-image-viewer-bar{padding:8px;align-items:flex-start}
+  .record-image-viewer-actions .btn{padding:7px 9px;font-size:10px}
+  .record-image-viewer-stage{padding:6px}
+  .record-image-viewer-stage img{max-width:100%;max-height:100%}
+}
