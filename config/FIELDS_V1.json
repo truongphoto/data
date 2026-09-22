@@ -1,0 +1,39 @@
+{
+  "version": "1.2.0",
+  "document_types": {
+    "cchnd": [
+      "so_cchnd",
+      "ngay_cap_cchnd",
+      "noi_cap_cchnd",
+      "nguoi_ptcm"
+    ],
+    "gpkd": [
+      "ten_co_so",
+      "loai_co_so",
+      "dien_thoai",
+      "dia_chi"
+    ],
+    "bang": [
+      "nam_cap_bang",
+      "truong_tot_nghiep"
+    ],
+    "ddkkdd": [
+      "so_ddkkdd",
+      "ngay_cap_ddkkdd"
+    ],
+    "gpp": [
+      "so_gpp",
+      "ngay_cap_gpp"
+    ]
+  },
+  "policy": {
+    "select_document_before_capture": true,
+    "prefer_upper_candidate_when_equivalent": true,
+    "certificate_issuer_normalize_to_so_y_te_locality": true,
+    "business_address_after_head_office_anchor_max_lines": 3,
+    "graduation_year_prefer_bottom_right_signature_area": true,
+    "never_guess_when_uncertain": true,
+    "human_confirmation_required": true,
+    "preserve_v1_indexeddb": true
+  }
+}

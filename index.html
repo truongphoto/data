@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>GPP Data Entry Lite V1.2.18</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- V1.2.18: màn hình khởi động riêng cho điện thoại/PWA. PC không hiển thị lớp này. -->
+  <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
+    <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
+    <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
+    <div class="mobile-pwa-actions" aria-label="Cài đặt và cập nhật ứng dụng">
+      <button id="btnPwaInstall" class="mobile-pwa-btn" type="button" hidden>Cài đặt ứng dụng</button>
+      <button id="btnPwaUpdate" class="mobile-pwa-btn" type="button" hidden>Cập nhật</button>
+    </div>
+  </section>
+
+  <!-- V1.2.18: camera toàn màn hình trên Android/PWA, crop đúng theo khung chụp. -->
+  <section id="mobileCapture" class="mobile-capture" aria-hidden="true">
+    <video id="mobileCameraVideo" autoplay playsinline muted></video>
+    <div id="mobileCaptureFrame" class="mobile-capture-frame" aria-hidden="true"></div>
+    <div class="mobile-capture-top">
+      <button id="btnCloseMobileCamera" class="mobile-camera-icon" type="button" aria-label="Đóng camera">×</button>
+      <div id="mobileCaptureCounter" class="mobile-capture-counter">1/5</div>
+    </div>
+    <div class="mobile-capture-bottom">
+      <button id="btnSkipMobileDoc" class="mobile-camera-secondary" type="button">Bỏ qua</button>
+      <button id="btnShootMobileDoc" class="mobile-camera-shutter" type="button">
+        <span>CHỤP</span>
+        <strong id="mobileCaptureDocName">Chứng chỉ hành nghề dược</strong>
+      </button>
+      <button id="btnMobileFlashInfo" class="mobile-camera-secondary" type="button" disabled>Tự crop</button>
+    </div>
+  </section>
+
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
+      <div class="brand-copy">
+        <h1>GPP Data Entry Lite <span>V1.2.18</span></h1>
+        <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btnRecords" class="btn secondary">Hồ sơ đã lưu</button>
+      <button id="btnNew" class="btn secondary">Hồ sơ mới</button>
+      <button id="btnSave" class="btn primary">Lưu hồ sơ</button>
+      <button id="btnExport" class="btn secondary">Xuất Excel</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="panel documents-panel mobile-active" data-tab="docs">
+      <div class="panel-title compact-title">
+        <div>
+          <h2>1. Tài liệu</h2>
+          <p>Chọn đúng giấy rồi chụp hoặc upload. Có thể xóa ảnh để làm lại.</p>
+        </div>
+        <span id="docProgress" class="badge">0/5 giấy</span>
+      </div>
+      <div id="documents" class="document-list no-scrollbar"></div>
+    </section>
+
+    <section class="panel preview-panel" data-tab="image">
+      <div class="panel-title compact-title">
+        <div>
+          <h2>2. Ảnh & bằng chứng</h2>
+          <p>Con lăn để zoom • giữ/kéo ảnh để di chuyển • nhấp đúp để vừa khung.</p>
+        </div>
+        <div class="viewer-tools" aria-label="Điều khiển phóng to ảnh">
+          <button id="btnZoomOut" class="icon-btn" title="Thu nhỏ">−</button>
+          <button id="btnZoomFit" class="zoom-label" title="Vừa khung">100%</button>
+          <button id="btnZoomIn" class="icon-btn" title="Phóng to">+</button>
+        </div>
+      </div>
+      <div id="previewWrap" class="preview-wrap no-scrollbar">
+        <canvas id="previewCanvas"></canvas>
+        <div id="previewEmpty" class="empty">Chưa có ảnh tài liệu.</div>
+      </div>
+      <div id="ocrStatus" class="ocr-status">Sẵn sàng.</div>
+    </section>
+
+    <section class="panel fields-panel" data-tab="fields">
+      <div class="panel-title compact-title">
+        <div>
+          <h2>3. Dữ liệu</h2>
+          <p>OCR không đọc được hoặc đọc sai: nhập/sửa trực tiếp trong ô.</p>
+        </div>
+      </div>
+      <div id="fields" class="field-list no-scrollbar"></div>
+      <div class="legend">
+        <span><i class="dot good"></i> Tin cậy cao</span>
+        <span><i class="dot warn"></i> Cần kiểm tra</span>
+        <span><i class="dot bad"></i> Bắt buộc kiểm tra</span>
+      </div>
+    </section>
+  </main>
+
+  <nav class="mobile-tabs" aria-label="Điều hướng trên điện thoại">
+    <button class="mobile-tab active" data-mobile-tab="docs">Tài liệu</button>
+    <button class="mobile-tab" data-mobile-tab="image">Ảnh</button>
+    <button class="mobile-tab" data-mobile-tab="fields">Dữ liệu</button>
+    <button class="mobile-tab" id="btnRecordsMobile">Hồ sơ</button>
+  </nav>
+
+  <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+  <input id="mobileCameraFallback" type="file" accept="image/*" capture="environment" hidden />
+  <input id="uploadInput" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+
+  <!-- Danh sách hồ sơ: cửa sổ riêng dạng bảng -->
+  <div id="recordsModal" class="modal" aria-hidden="true">
+    <div class="modal-card records-window">
+      <div class="modal-header">
+        <div>
+          <h2>Hồ sơ đã lưu</h2>
+          <p>Mở hồ sơ để xem toàn bộ dữ liệu trong cửa sổ dạng Excel.</p>
+        </div>
+        <div class="modal-actions">
+          <input id="searchRecords" class="search" placeholder="Tìm tên cơ sở, số GPP, CCHND..." />
+          <button class="btn secondary" data-close-modal="recordsModal">Đóng</button>
+        </div>
+      </div>
+      <div class="excel-wrap no-scrollbar">
+        <table class="excel-table records-table">
+          <thead><tr><th>STT</th><th>Tên cơ sở</th><th>Loại</th><th>Số CCHND</th><th>Số ĐĐKKDD</th><th>Số GPP</th><th>Cập nhật</th><th>Thao tác</th></tr></thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chi tiết một hồ sơ: cửa sổ riêng dạng Excel, cho phép sửa trực tiếp -->
+  <div id="recordModal" class="modal" aria-hidden="true">
+    <div class="modal-card record-window">
+      <div class="modal-header">
+        <div>
+          <h2 id="recordModalTitle">Chi tiết hồ sơ</h2>
+          <p>Nhập hoặc sửa trực tiếp tại cột “Nội dung”.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="btnSaveSheet" class="btn primary">Lưu thay đổi</button>
+          <button class="btn secondary" data-close-modal="recordModal">Đóng</button>
+        </div>
+      </div>
+      <div class="excel-wrap no-scrollbar">
+        <table class="excel-table record-sheet">
+          <thead><tr><th class="col-no">STT</th><th>Trường dữ liệu</th><th>Nội dung</th><th class="col-status">Trạng thái</th></tr></thead>
+          <tbody id="recordSheetBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

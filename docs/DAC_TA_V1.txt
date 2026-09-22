@@ -1,0 +1,17 @@
+ĐẶC TẢ GPP DATA ENTRY LITE V1.2
+
+5 tài liệu / 14 trường:
+CCHND: Số CCHND; Ngày cấp CCHND; Nơi cấp CCHND; Người PTCM.
+GPKD: Tên cơ sở; Loại cơ sở; Điện thoại; Địa chỉ.
+Bằng tốt nghiệp: Năm cấp bằng; Trường tốt nghiệp.
+ĐĐKKDD: Số ĐĐKKDD; Ngày cấp ĐĐKKDD.
+GPP: Số GPP; Ngày cấp GPP.
+
+Rule bắt buộc:
+- Ngày cấp ưu tiên vùng chữ ký/phần cuối tài liệu.
+- Năm cấp bằng ưu tiên vùng dưới/góc phải.
+- Địa chỉ chỉ lấy sau anchor “Trụ sở của hộ kinh doanh:” và tối đa 3 dòng.
+- Nơi cấp CCHND chuẩn hóa “SỞ Y TẾ + tỉnh/thành” từ phần đầu giấy.
+- Không lấy Nơi cấp CMND/CCCD làm nơi cấp CCHND.
+- ĐĐKKDD không lấy số CCHND trong phần thân.
+- Không chắc thì để trống; người dùng luôn có quyền nhập/sửa trực tiếp.

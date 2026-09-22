@@ -1,0 +1,6 @@
+// Máy chủ tĩnh cực nhỏ, chỉ dùng module có sẵn của Node.js.
+const http=require('http'),fs=require('fs'),path=require('path'),os=require('os');
+const root=__dirname,port=8787;
+const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webmanifest':'application/manifest+json','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
+const server=http.createServer((req,res)=>{let p=decodeURIComponent(req.url.split('?')[0]);if(p==='/'||!p)p='/index.html';const file=path.normalize(path.join(root,p));if(!file.startsWith(root)){res.writeHead(403);return res.end('Forbidden')}fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache'});res.end(data)})});
+server.listen(port,'0.0.0.0',()=>{const nets=os.networkInterfaces();const ips=[];Object.values(nets).flat().forEach(n=>{if(n&&n.family==='IPv4'&&!n.internal)ips.push(n.address)});console.log(`GPP Data Entry Lite V1.2: http://localhost:${port}`);ips.forEach(ip=>console.log(`Trong cung Wi-Fi: http://${ip}:${port}`));});
