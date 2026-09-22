@@ -1,6 +1,6 @@
 /* GPP Data Entry Lite V1.2.29
    Nền OCR/rule khóa nguyên V1.2.27.
-   V1.2.29 giữ nguyên lấy nét V1.2.28 và bổ sung chọn camera/zoom realtime Android/PWA; không thay OCR/rule/hồ sơ/chia sẻ.
+   V1.2.30 khóa nguyên camera V1.2.29 cho máy tương thích; chỉ bổ sung Camera Hybrid khi Chrome expose 0–1 camera sau; không thay OCR/rule/hồ sơ/chia sẻ.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1881,6 +1881,7 @@ const MOBILE_CAPTURE_ORDER=['cchnd','gpkd','bang','ddkkdd','gpp'];
 let mobileCameraStream=null,mobileCaptureIndex=0,mobileSingleDoc=null,deferredInstallPrompt=null,pwaRegistration=null;
 let mobileCaptureBusy=false,mobileCameraSettlingUntil=0,mobileSettleTimer=null,mobileFocusRun=0,mobileFocusCapabilities=null;
 let mobileVideoDevices=[],mobileCameraSwitchRun=0,mobileZoomRange=null,mobileCurrentCameraId='';
+let mobileHybridLimitedCamera=false,mobileSystemCameraPending=false,mobileHybridZoomTimer=null;
 const MOBILE_SETTINGS_KEY='gpp_mobile_settings_v1219';
 let mobileSettings=(()=>{try{return {autoCrop:true,sound:true,vibration:true,cameraId:'',...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true,sound:true,vibration:true,cameraId:''}}})();
 let shutterAudioContext=null;
@@ -2095,15 +2096,72 @@ async function setMobileCameraZoom(value){
   let ok=false;try{await track.applyConstraints({advanced:[{zoom:z}]});ok=true}catch(e){try{await track.applyConstraints({zoom:z});ok=true}catch(err){console.warn('Zoom:',err)}}
   if(ok){renderMobileZoomChoices();await configureMobileContinuousFocus().catch(()=>{});}return ok;
 }
+function mobileRearCameraCount(){
+  const cams=mobileVideoDevices||[];
+  const definiteBack=cams.filter(c=>isBackCameraLabel(c.label));
+  if(definiteBack.length)return definiteBack.length;
+  const nonFront=cams.filter(c=>!isFrontCameraLabel(c.label));
+  return nonFront.length||cams.length;
+}
+function updateMobileHybridCameraUI(){
+  const host=$('#mobileHybridCameraTools'),zoomRow=$('#mobileHybridZoomRow'),slider=$('#mobileHybridZoomRange'),value=$('#mobileHybridZoomValue');
+  if(!host)return;
+  // Chỉ bổ sung cho trường hợp Chrome không expose được nhiều camera sau.
+  const limited=mobileRearCameraCount()<=1;
+  mobileHybridLimitedCamera=limited;
+  host.hidden=!limited;
+  if(!limited){if(zoomRow)zoomRow.hidden=true;return;}
+  const range=readMobileZoomRange();
+  if(range&&range.max-range.min>=0.05&&slider&&value){
+    let settings={};try{settings=getMobileCameraTrack()?.getSettings?.()||{}}catch(_e){}
+    const current=Math.max(range.min,Math.min(range.max,typeof settings.zoom==='number'?settings.zoom:range.min));
+    slider.min=String(range.min);slider.max=String(range.max);slider.step=String(range.step||0.1);slider.value=String(current);
+    value.textContent=`${current<10?current.toFixed(current%1?1:0):Math.round(current)}x`;
+    zoomRow.hidden=false;
+  }else if(zoomRow)zoomRow.hidden=true;
+}
+async function applyMobileHybridZoom(value){
+  if(!mobileHybridLimitedCamera)return false;
+  const ok=await setMobileCameraZoom(Number(value));
+  if(ok){
+    const slider=$('#mobileHybridZoomRange'),label=$('#mobileHybridZoomValue');
+    let settings={};try{settings=getMobileCameraTrack()?.getSettings?.()||{}}catch(_e){}
+    const actual=typeof settings.zoom==='number'?settings.zoom:Number(value);
+    if(slider)slider.value=String(actual);
+    if(label)label.textContent=`${actual<10?actual.toFixed(actual%1?1:0):Math.round(actual)}x`;
+  }
+  return ok;
+}
+function currentMobileDocType(){return mobileSingleDoc||MOBILE_CAPTURE_ORDER[Math.max(0,Math.min(MOBILE_CAPTURE_ORDER.length-1,mobileCaptureIndex))];}
+function openMobileSystemCamera(){
+  if(!mobileHybridLimitedCamera)return;
+  const k=currentMobileDocType();if(!k)return;
+  pendingDoc=k;mobileSystemCameraPending=true;
+  // Giải phóng camera web trước khi gọi Camera Samsung/Android để tránh tranh chấp phần cứng.
+  stopMobileCamera();
+  const input=$('#mobileCameraFallback');if(input){input.value='';input.click();}
+}
+function restoreMobileCameraAfterSystemCancel(){
+  if(!mobileSystemCameraPending||!document.body.classList.contains('mobile-camera-open'))return;
+  const input=$('#mobileCameraFallback');
+  setTimeout(async()=>{
+    if(!mobileSystemCameraPending)return;
+    if(input?.files?.length)return;
+    mobileSystemCameraPending=false;
+    try{await startMobileCameraStream(mobileSettings.cameraId||'');toast('Đã trở lại camera trong ứng dụng.');}
+    catch(e){console.warn('Khôi phục camera sau khi hủy Camera hệ thống:',e);toast('Không mở lại được camera trong ứng dụng.');}
+  },650);
+}
+
 async function refreshMobileCameraDevices(){
   if(!navigator.mediaDevices?.enumerateDevices)return [];
   let list=[];try{list=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput')}catch(e){console.warn('enumerateDevices:',e);}
-  if(!list.length){mobileVideoDevices=[];renderMobileCameraChoices();return []}
+  if(!list.length){mobileVideoDevices=[];renderMobileCameraChoices();updateMobileHybridCameraUI();return []}
   const explicitBack=list.filter(d=>isBackCameraLabel(d.label));
   const nonFront=list.filter(d=>!isFrontCameraLabel(d.label));
   // Ưu tiên camera sau; nếu Chrome không cấp nhãn thì giữ toàn bộ để người dùng tự xem realtime.
   mobileVideoDevices=explicitBack.length?explicitBack:(nonFront.length?nonFront:list);
-  renderMobileCameraChoices();return mobileVideoDevices;
+  renderMobileCameraChoices();updateMobileHybridCameraUI();return mobileVideoDevices;
 }
 async function switchMobileCameraDevice(deviceId,button=null){
   if(!deviceId||deviceId===mobileCurrentCameraId)return;
@@ -2166,6 +2224,7 @@ async function startMobileCameraStream(preferredDeviceId='',options={}){
     const cur=all.find(d=>d.deviceId===mobileCurrentCameraId);if(cur){mobileVideoDevices=[cur,...mobileVideoDevices.filter(d=>d.deviceId!==cur.deviceId)];renderMobileCameraChoices();}
   }else renderMobileCameraChoices();
   renderMobileZoomChoices();
+  updateMobileHybridCameraUI();
 }
 async function openMobileCamera(singleDoc=null){
   mobileSingleDoc=singleDoc;if(singleDoc)mobileCaptureIndex=Math.max(0,MOBILE_CAPTURE_ORDER.indexOf(singleDoc));
@@ -2225,8 +2284,11 @@ async function startMobileProfileFlow(){
   await openMobileCamera(null);
 }
 function handleMobileFallback(input){
-  const file=input.files?.[0],k=pendingDoc;if(file&&k)processImage(k,file);
-  input.value='';
+  const file=input.files?.[0],k=pendingDoc;
+  const fromSystemCamera=mobileSystemCameraPending;
+  if(file&&k)processImage(k,file);
+  input.value='';mobileSystemCameraPending=false;
+  if(!file){if(fromSystemCamera&&document.body.classList.contains('mobile-camera-open'))startMobileCameraStream(mobileSettings.cameraId||'').catch(()=>{});return;}
   if(mobileSingleDoc){setMobileIntro(false);switchMobileTab('docs');mobileSingleDoc=null;return;}
   if(isMobileCaptureEnvironment()){
     mobileCaptureIndex=Math.max(0,MOBILE_CAPTURE_ORDER.indexOf(k))+1;
@@ -2239,6 +2301,8 @@ $('#btnMobileSound').onclick=toggleMobileSound;
 $('#btnMobileVibration').onclick=toggleMobileVibration;
 $('#btnMobileCaptureSettings').onclick=openSettingsModal;
 $('#btnMobileRefocus').onclick=()=>refocusMobileCamera(null,{notify:true}).catch(()=>toast('Không lấy nét lại được.'));
+$('#btnMobileSystemCamera').onclick=openMobileSystemCamera;
+$('#mobileHybridZoomRange').addEventListener('input',e=>{const v=Number(e.target.value);const label=$('#mobileHybridZoomValue');if(label)label.textContent=`${v<10?v.toFixed(v%1?1:0):Math.round(v)}x`;if(mobileHybridZoomTimer)clearTimeout(mobileHybridZoomTimer);mobileHybridZoomTimer=setTimeout(()=>applyMobileHybridZoom(v).catch(()=>{}),70);});
 $('#mobileCapture').addEventListener('pointerup',handleMobileTapFocus,{passive:true});
 $('#settingAutoCrop').onchange=e=>{mobileSettings.autoCrop=!!e.target.checked;saveMobileSettings();toast(mobileSettings.autoCrop?'Tự động crop: Bật':'Tự động crop: Tắt');};
 $('#btnCloseMobileCamera').onclick=()=>closeMobileCamera(true);
@@ -2248,6 +2312,7 @@ $('#btnPwaInstall').onclick=installPWA;
 $('#btnPwaUpdate').onclick=applyPWAUpdate;
 $('#mobileCameraFallback').onchange=e=>handleMobileFallback(e.target);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&document.body.classList.contains('mobile-camera-open')){/* Android có thể tạm ẩn app khi cấp quyền; không tự đóng camera. */}});
+window.addEventListener('focus',restoreMobileCameraAfterSystemCancel);
 if(navigator.mediaDevices?.addEventListener)navigator.mediaDevices.addEventListener('devicechange',()=>{if(document.body.classList.contains('mobile-camera-open'))refreshMobileCameraDevices().catch(()=>{});});
 // V1.2.19: tất cả nút trên điện thoại có phản hồi nhẹ; nút chụp dùng rung/âm thanh riêng.
 document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('button');if(!b||b.disabled)return;b.classList.add('tap-feedback');setTimeout(()=>b.classList.remove('tap-feedback'),130);},{passive:true});

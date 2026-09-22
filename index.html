@@ -43,6 +43,14 @@
     <div id="mobileCameraChooser" class="mobile-camera-chooser" aria-label="Chọn camera và zoom">
       <div id="mobileLensButtons" class="mobile-lens-buttons"></div>
       <div id="mobileZoomButtons" class="mobile-zoom-buttons" hidden></div>
+      <div id="mobileHybridCameraTools" class="mobile-hybrid-camera-tools" hidden>
+        <div id="mobileHybridZoomRow" class="mobile-hybrid-zoom-row" hidden>
+          <span class="mobile-hybrid-label">Zoom</span>
+          <input id="mobileHybridZoomRange" class="mobile-hybrid-zoom-range" type="range" min="1" max="1" step="0.1" value="1" aria-label="Zoom camera logic" />
+          <span id="mobileHybridZoomValue" class="mobile-hybrid-zoom-value">1x</span>
+        </div>
+        <button id="btnMobileSystemCamera" class="mobile-system-camera-btn" type="button">📷 Camera hệ thống</button>
+      </div>
     </div>
     <div class="mobile-capture-bottom">
       <button id="btnSkipMobileDoc" class="mobile-camera-secondary" type="button">Bỏ qua</button>
@@ -58,7 +66,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.29</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.30</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>

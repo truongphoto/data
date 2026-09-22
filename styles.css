@@ -237,3 +237,14 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .mobile-lens-btn.active,.mobile-zoom-btn.active{background:#fff;color:#0f766e;border-color:#fff;box-shadow:0 0 0 2px rgba(15,118,110,.34)}
   .mobile-lens-btn.switching{opacity:.62}
 }
+
+/* V1.2.30 - Camera Hybrid chỉ hiện khi Chrome không expose đủ camera sau. */
+@media (max-width: 900px){
+  .mobile-hybrid-camera-tools{display:flex;align-items:center;justify-content:center;gap:8px;max-width:94vw;padding:6px 8px;border-radius:14px;background:rgba(0,0,0,.46);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .mobile-hybrid-camera-tools[hidden]{display:none}
+  .mobile-hybrid-zoom-row{display:grid;grid-template-columns:auto minmax(90px,160px) 42px;align-items:center;gap:7px;color:#fff;font-size:12px;font-weight:800}
+  .mobile-hybrid-zoom-row[hidden]{display:none}
+  .mobile-hybrid-zoom-range{width:100%;accent-color:#36d6c7}
+  .mobile-hybrid-zoom-value{text-align:right;font-variant-numeric:tabular-nums}
+  .mobile-system-camera-btn{min-height:38px;padding:0 12px;border:1px solid rgba(255,255,255,.36);border-radius:999px;background:rgba(255,255,255,.92);color:#0f5f59;font-weight:900;font-family:inherit;white-space:nowrap}
+}
