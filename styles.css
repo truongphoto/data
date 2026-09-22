@@ -129,3 +129,13 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
 .record-row-actions .btn:last-child{margin-right:0}
 .btn.excel{background:#dcfce7;color:#166534}
 .btn.excel:hover{background:#bbf7d0}
+
+
+/* V1.2.21: nút nhanh âm thanh/rung trên màn hình đầu Android */
+@media(max-width:760px){
+  .mobile-quick-toggle{position:relative;width:48px;height:48px;border:1px solid #b9d5d2;border-radius:50%;background:#f4fbfa;color:#0f5e58;display:inline-flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 8px rgba(15,118,110,.10)}
+  .mobile-quick-toggle .mobile-toggle-icon{font-size:23px;line-height:1;filter:saturate(.95)}
+  .mobile-quick-toggle.is-off{background:#f3f4f6;color:#64748b;border-color:#d1d5db}
+  .mobile-quick-toggle.is-off::after{content:"";position:absolute;width:28px;height:2.5px;background:#ef4444;border-radius:99px;transform:rotate(-42deg);box-shadow:0 0 0 1px rgba(255,255,255,.55)}
+  .mobile-pwa-actions{align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+}

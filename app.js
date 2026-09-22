@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.19
-   Giữ nguyên toàn bộ cấu trúc, OCR và rule của V1.2.16 FINAL.
-   V1.2.19 giữ nguyên OCR/rule V1.2.18; chỉ bổ sung phản hồi chạm/chụp, cài đặt crop và xuất hồ sơ có chọn.
+/* GPP Data Entry Lite V1.2.21
+   Giữ nguyên toàn bộ cấu trúc, OCR và rule của V1.2.20.
+   V1.2.21 chỉ bổ sung nút nhanh bật/tắt âm thanh và rung trên màn hình đầu Android.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1656,15 +1656,26 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 const MOBILE_CAPTURE_ORDER=['cchnd','gpkd','bang','ddkkdd','gpp'];
 let mobileCameraStream=null,mobileCaptureIndex=0,mobileSingleDoc=null,deferredInstallPrompt=null,pwaRegistration=null;
 const MOBILE_SETTINGS_KEY='gpp_mobile_settings_v1219';
-let mobileSettings=(()=>{try{return {autoCrop:true,...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true}}})();
+let mobileSettings=(()=>{try{return {autoCrop:true,sound:true,vibration:true,...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true,sound:true,vibration:true}}})();
 let shutterAudioContext=null;
 function saveMobileSettings(){try{localStorage.setItem(MOBILE_SETTINGS_KEY,JSON.stringify(mobileSettings))}catch(e){}}
-function syncMobileSettingsUI(){const el=$('#settingAutoCrop');if(el)el.checked=mobileSettings.autoCrop!==false;}
+function syncMobileSettingsUI(){
+  const el=$('#settingAutoCrop');if(el)el.checked=mobileSettings.autoCrop!==false;
+  syncMobileQuickToggles();
+}
+function syncMobileQuickToggles(){
+  const sound=$('#btnMobileSound'),vib=$('#btnMobileVibration');
+  if(sound){const on=mobileSettings.sound!==false;sound.classList.toggle('is-off',!on);sound.setAttribute('aria-pressed',on?'true':'false');sound.setAttribute('aria-label',on?'Âm thanh đang bật. Chạm để tắt':'Âm thanh đang tắt. Chạm để bật');const icon=sound.querySelector('.mobile-toggle-icon');if(icon)icon.textContent=on?'🔊':'🔇';}
+  if(vib){const on=mobileSettings.vibration!==false;vib.classList.toggle('is-off',!on);vib.setAttribute('aria-pressed',on?'true':'false');vib.setAttribute('aria-label',on?'Rung đang bật. Chạm để tắt':'Rung đang tắt. Chạm để bật');const icon=vib.querySelector('.mobile-toggle-icon');if(icon)icon.textContent='📳';}
+}
+function toggleMobileSound(){mobileSettings.sound=mobileSettings.sound===false;saveMobileSettings();syncMobileQuickToggles();toast(mobileSettings.sound?'Âm thanh: Bật':'Âm thanh: Tắt');}
+function toggleMobileVibration(){mobileSettings.vibration=mobileSettings.vibration===false;saveMobileSettings();syncMobileQuickToggles();if(mobileSettings.vibration&&navigator.vibrate)try{navigator.vibrate(24)}catch(e){}toast(mobileSettings.vibration?'Rung: Bật':'Rung: Tắt');}
 function openSettingsModal(){syncMobileSettingsUI();openModal('settingsModal');}
-function lightHaptic(ms=10){if(isMobileCaptureEnvironment()&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}}
+function lightHaptic(ms=10){if(mobileSettings.vibration!==false&&isMobileCaptureEnvironment()&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}}
 function playShutterFeedback(){
-  if(navigator.vibrate)try{navigator.vibrate([34,28,52])}catch(e){}
+  if(mobileSettings.vibration!==false&&navigator.vibrate)try{navigator.vibrate([34,28,52])}catch(e){}
   const cap=$('#mobileCapture');if(cap){cap.classList.remove('camera-flash');void cap.offsetWidth;cap.classList.add('camera-flash');setTimeout(()=>cap.classList.remove('camera-flash'),220);}
+  if(mobileSettings.sound===false)return;
   try{
     const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
     shutterAudioContext=shutterAudioContext||new AC();const ctx=shutterAudioContext;if(ctx.state==='suspended')ctx.resume();
@@ -1802,7 +1813,8 @@ function handleMobileFallback(input){
 }
 $('#btnMobileStart').onclick=startMobileProfileFlow;
 $('#btnMobileRecordsHome').onclick=async()=>{setMobileIntro(false);await openRecordsModal();};
-$('#btnMobileSettings').onclick=openSettingsModal;
+$('#btnMobileSound').onclick=toggleMobileSound;
+$('#btnMobileVibration').onclick=toggleMobileVibration;
 $('#btnMobileCaptureSettings').onclick=openSettingsModal;
 $('#settingAutoCrop').onchange=e=>{mobileSettings.autoCrop=!!e.target.checked;saveMobileSettings();toast(mobileSettings.autoCrop?'Tự động crop: Bật':'Tự động crop: Tắt');};
 $('#btnCloseMobileCamera').onclick=()=>closeMobileCamera(true);

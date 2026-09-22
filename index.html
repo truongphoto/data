@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.20</title>
+  <title>GPP Data Entry Lite V1.2.21</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -16,13 +16,14 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.20: giữ nguyên OCR/rule V1.2.19; thêm xuất Excel nhanh từng hồ sơ lưu. -->
+  <!-- V1.2.21: giữ nguyên toàn bộ V1.2.20; màn hình đầu Android có nút nhanh âm thanh/rung. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
     <button id="btnMobileRecordsHome" class="mobile-home-secondary" type="button">Hồ sơ lưu</button>
-    <div class="mobile-pwa-actions" aria-label="Cài đặt, cài ứng dụng và cập nhật">
-      <button id="btnMobileSettings" class="mobile-pwa-btn" type="button">Cài đặt</button>
+    <div class="mobile-pwa-actions" aria-label="Âm thanh, rung, cài ứng dụng và cập nhật">
+      <button id="btnMobileSound" class="mobile-quick-toggle" type="button" aria-label="Bật hoặc tắt âm thanh" title="Âm thanh"><span class="mobile-toggle-icon" aria-hidden="true">🔊</span></button>
+      <button id="btnMobileVibration" class="mobile-quick-toggle" type="button" aria-label="Bật hoặc tắt rung" title="Rung"><span class="mobile-toggle-icon" aria-hidden="true">📳</span></button>
       <button id="btnPwaInstall" class="mobile-pwa-btn" type="button" hidden>Cài đặt ứng dụng</button>
       <button id="btnPwaUpdate" class="mobile-pwa-btn" type="button" hidden>Cập nhật</button>
     </div>
@@ -51,7 +52,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.20</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.21</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
