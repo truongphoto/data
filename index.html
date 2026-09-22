@@ -7,16 +7,17 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.22</title>
+  <title>GPP Data Entry Lite V1.2.23</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.22: giữ nguyên toàn bộ V1.2.21; Android bổ sung chia sẻ Excel hồ sơ qua Share Sheet (chọn Zalo). -->
+  <!-- V1.2.23: giữ nguyên OCR/rule V1.2.22; bổ sung dung lượng, xem/xóa ảnh và tải gói hồ sơ. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
@@ -52,7 +53,7 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.22</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.23</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
@@ -165,6 +166,22 @@
           <tbody id="recordSheetBody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- V1.2.23: xem ảnh đã lưu của một hồ sơ. -->
+  <div id="recordImagesModal" class="modal" aria-hidden="true">
+    <div class="modal-card record-images-window">
+      <div class="modal-header">
+        <div>
+          <h2 id="recordImagesTitle">Ảnh hồ sơ</h2>
+          <p id="recordImagesSummary">Các ảnh đang được lưu trong hồ sơ.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn secondary" data-close-modal="recordImagesModal">Đóng</button>
+        </div>
+      </div>
+      <div id="recordImagesGrid" class="record-images-grid"></div>
     </div>
   </div>
 

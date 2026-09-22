@@ -1544,6 +1544,87 @@ async function putRecord(rec){const d=await db();return new Promise((res,rej)=>{
 async function allRecords(){const d=await db();return new Promise((res,rej)=>{const r=d.transaction('records').objectStore('records').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
 async function getRecord(id){const d=await db();return new Promise((res,rej)=>{const r=d.transaction('records').objectStore('records').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function deleteRecord(id){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction('records','readwrite');tx.objectStore('records').delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
+
+/* V1.2.23 - quản lý dung lượng/ảnh hồ sơ lưu. Không thay đổi OCR/rule. */
+const DOC_FILE_LABELS_V1223={cchnd:'CCHND',gpkd:'GPKD',bang:'BANG_TOT_NGHIEP',ddkkdd:'DDKKDD',gpp:'GPP'};
+let recordImagePreviewUrlsV1223=[];
+function recordImageEntriesV1223(raw){
+  return Object.keys(DOCS).map(k=>({key:k,doc:raw?.documents?.[k]||null,blob:raw?.documents?.[k]?.blob||null})).filter(x=>x.blob instanceof Blob);
+}
+function recordStorageBytesV1223(raw){
+  if(!raw)return 0;
+  let blobBytes=0;
+  const json=JSON.stringify(raw,(k,v)=>{
+    if(v instanceof Blob){blobBytes+=Number(v.size||0);return {__blob__:true,type:v.type||'',name:v.name||'',size:v.size||0};}
+    return v;
+  });
+  let dataBytes=0;try{dataBytes=new TextEncoder().encode(json||'').length;}catch(_e){dataBytes=(json||'').length*2;}
+  return blobBytes+dataBytes;
+}
+function formatBytesV1223(bytes=0){
+  const n=Math.max(0,Number(bytes)||0);if(n<1024)return `${Math.round(n)} B`;
+  if(n<1024*1024)return `${new Intl.NumberFormat('vi-VN',{maximumFractionDigits:1}).format(n/1024)} KB`;
+  return `${new Intl.NumberFormat('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1}).format(n/1024/1024)} MB`;
+}
+function imageExtensionV1223(blob,name=''){
+  const ext=String(name||'').toLowerCase().match(/\.(jpe?g|png|webp)$/)?.[1];if(ext)return ext==='jpeg'?'jpg':ext;
+  const t=String(blob?.type||'').toLowerCase();if(t.includes('png'))return 'png';if(t.includes('webp'))return 'webp';return 'jpg';
+}
+function safeRecordStemV1223(raw){
+  const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Ho_So';
+  return ('GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)).replace(/_+$/,'')||'GPP_Ho_So';
+}
+function clearRecordImagePreviewUrlsV1223(){recordImagePreviewUrlsV1223.forEach(u=>{try{URL.revokeObjectURL(u)}catch(_e){}});recordImagePreviewUrlsV1223=[];}
+async function openSavedRecordImagesV1223(id){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return;}
+  clearRecordImagePreviewUrlsV1223();
+  const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ';
+  $('#recordImagesTitle').textContent=`Ảnh hồ sơ – ${name}`;
+  const entries=recordImageEntriesV1223(raw),grid=$('#recordImagesGrid');grid.innerHTML='';
+  $('#recordImagesSummary').textContent=`${entries.length} ảnh đang lưu • Dung lượng hồ sơ: ${formatBytesV1223(recordStorageBytesV1223(raw))}`;
+  if(!entries.length){grid.innerHTML='<div class="record-images-empty">Hồ sơ này không còn ảnh lưu trên thiết bị.</div>';openModal('recordImagesModal');return;}
+  entries.forEach(({key,doc,blob})=>{
+    const url=URL.createObjectURL(blob);recordImagePreviewUrlsV1223.push(url);
+    const card=document.createElement('article');card.className='record-image-card';
+    card.innerHTML=`<h3>${esc(DOCS[key]?.name||key)}</h3><div class="record-image-frame"><img src="${url}" alt="${esc(DOCS[key]?.name||key)}" /></div><div class="record-image-meta"><span>${esc(doc?.name||'Ảnh hồ sơ')} • ${formatBytesV1223(blob.size||0)}</span><button class="btn small secondary" type="button" data-download-record-image="${key}">Tải ảnh</button></div>`;
+    grid.appendChild(card);
+  });
+  grid.querySelectorAll('[data-download-record-image]').forEach(b=>b.onclick=()=>{
+    const key=b.dataset.downloadRecordImage,e=entries.find(x=>x.key===key);if(!e)return;
+    const ext=imageExtensionV1223(e.blob,e.doc?.name),file=new File([e.blob],`${DOC_FILE_LABELS_V1223[key]||key}.${ext}`,{type:e.blob.type||'image/jpeg'});downloadGeneratedFile(file);
+  });
+  openModal('recordImagesModal');
+}
+async function deleteSavedRecordImagesV1223(id){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ.');return false;}
+  const entries=recordImageEntriesV1223(raw);if(!entries.length){toast('Hồ sơ này không còn ảnh để xóa.');return false;}
+  const freed=entries.reduce((n,x)=>n+Number(x.blob?.size||0),0);
+  if(!confirm(`Xóa ${entries.length} ảnh của hồ sơ này để giải phóng khoảng ${formatBytesV1223(freed)}?\n\nDữ liệu OCR, Ban hành và nội dung hồ sơ vẫn được giữ nguyên.`))return false;
+  Object.keys(raw.documents||{}).forEach(k=>{const d=raw.documents[k];if(d?.blob instanceof Blob){d.blob=null;d.imageDeletedAt=new Date().toISOString();}});
+  raw.updatedAt=new Date().toISOString();await putRecord(raw);
+  if(state?.id===raw.id){state=hydrateState(raw);activeImage=null;currentEvidence=null;renderDocuments();drawPreview(null,null);}
+  await renderRecords($('#searchRecords').value);toast(`Đã xóa ảnh, giải phóng khoảng ${formatBytesV1223(freed)}.`);return true;
+}
+async function makeRecordPackageV1223(raw){
+  if(!raw)throw new Error('Không tìm thấy hồ sơ.');
+  if(!window.JSZip)throw new Error('Chưa tải được bộ đóng gói ZIP. Hãy kiểm tra mạng rồi thử lại.');
+  const zip=new JSZip(),excel=makeSingleRecordShareFile(raw),date=new Date().toISOString().slice(0,10),stem=safeRecordStemV1223(raw);
+  zip.file(excel.name,excel);
+  const folder=zip.folder('Anh_ho_so');
+  for(const {key,doc,blob} of recordImageEntriesV1223(raw)){
+    const ext=imageExtensionV1223(blob,doc?.name);folder.file(`${DOC_FILE_LABELS_V1223[key]||key}.${ext}`,blob);
+  }
+  const info=hydrateState(raw),lines=[`Tên cơ sở: ${info.fields.ten_co_so?.value||''}`,`Ban hành: ${info.banHanh?.value||''}`,`Ngày đóng gói: ${new Date().toLocaleString('vi-VN')}`,`Số ảnh: ${recordImageEntriesV1223(raw).length}`].join('\r\n');
+  zip.file('THONG_TIN_HO_SO.txt',lines);
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+  return new File([blob],`${stem}_${date}.zip`,{type:'application/zip'});
+}
+async function downloadRecordPackageV1223(id,button=null){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ để đóng gói.');return false;}
+  try{if(button)button.disabled=true;toast('Đang đóng gói Excel và ảnh...');const file=await makeRecordPackageV1223(raw);downloadGeneratedFile(file);toast(`Đã tải gói hồ sơ ${formatBytesV1223(file.size)}.`);return true;}
+  catch(e){console.error(e);toast(e.message||'Không đóng gói được hồ sơ.');return false;}
+  finally{if(button)button.disabled=false;}
+}
 async function saveCurrent(){
   const low=Object.entries(state.fields).filter(([,f])=>f.value&&!f.verified&&f.confidence<75);if(low.length&&!confirm(`Có ${low.length} trường OCR độ tin cậy thấp. Vẫn lưu hồ sơ?`))return false;
   refreshBanHanhDefault();
@@ -1555,12 +1636,16 @@ async function renderRecords(q=''){
   filtered.forEach((raw,idx)=>{
     const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';renderedSavedRecordById.set(String(r.id),raw);const tr=document.createElement('tr');
     const checked=selectedSavedRecordIds.has(r.id)?' checked':'';
-    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}</td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
+    const sizeText=formatBytesV1223(recordStorageBytesV1223(raw));
+    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}<div class="record-size">Dung lượng hồ sơ: ${sizeText}</div></td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small images" data-images="${r.id}">Xem ảnh</button> <button class="btn small delete-images" data-delete-images="${r.id}">Xóa ảnh</button> <button class="btn small package" data-package="${r.id}">Tải gói</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
   });
   body.querySelectorAll('[data-record-check]').forEach(ch=>ch.onchange=()=>{if(ch.checked)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);syncRecordSelectAll();});
   body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSavedRecord(b.dataset.open));
   body.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Xóa hồ sơ này khỏi thiết bị?')){selectedSavedRecordIds.delete(b.dataset.del);await deleteRecord(b.dataset.del);await renderRecords($('#searchRecords').value);toast('Đã xóa hồ sơ.')}});
   body.querySelectorAll('[data-excel]').forEach(b=>b.onclick=()=>exportSingleSavedRecord(b.dataset.excel));
+  body.querySelectorAll('[data-images]').forEach(b=>b.onclick=()=>openSavedRecordImagesV1223(b.dataset.images));
+  body.querySelectorAll('[data-delete-images]').forEach(b=>b.onclick=()=>deleteSavedRecordImagesV1223(b.dataset.deleteImages));
+  body.querySelectorAll('[data-package]').forEach(b=>b.onclick=()=>downloadRecordPackageV1223(b.dataset.package,b));
   body.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>shareSingleSavedRecord(renderedSavedRecordById.get(String(b.dataset.share)),b));
   syncRecordSelectAll();
 }
@@ -1649,7 +1734,7 @@ async function exportAllSavedRecords(){const arr=await allRecords();if(exportRec
 
 
 function openModal(id){const m=$('#'+id);m.classList.add('open');m.setAttribute('aria-hidden','false');}
-function closeModal(id){const m=$('#'+id);m.classList.remove('open');m.setAttribute('aria-hidden','true');}
+function closeModal(id){const m=$('#'+id);m.classList.remove('open');m.setAttribute('aria-hidden','true');if(id==='recordImagesModal')clearRecordImagePreviewUrlsV1223();}
 async function openRecordsModal(){await renderRecords($('#searchRecords').value);openModal('recordsModal');}
 function openRecordSheet(){
   refreshBanHanhDefault();

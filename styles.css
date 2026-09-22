@@ -147,3 +147,31 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .record-row-actions .btn.share{display:inline-flex;align-items:center;justify-content:center;background:#e0f2fe;color:#075985}
   .record-row-actions .btn.share:active{background:#bae6fd}
 }
+
+
+/* ================================================================
+   V1.2.23 - quản lý ảnh và dung lượng hồ sơ lưu. Không đổi OCR/rule.
+   ================================================================ */
+.record-size{margin-top:4px;font-size:10px;line-height:1.25;color:#64748b;font-weight:700;white-space:nowrap}
+.btn.images{background:#ede9fe;color:#5b21b6}
+.btn.images:hover{background:#ddd6fe}
+.btn.package{background:#fef3c7;color:#92400e}
+.btn.package:hover{background:#fde68a}
+.btn.delete-images{background:#fff1f2;color:#be123c;border-color:#fecdd3}
+.btn.delete-images:hover{background:#ffe4e6}
+.record-images-window{width:min(980px,96vw);height:min(820px,92vh)}
+.record-images-grid{padding:14px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;background:#f6f8fa}
+.record-image-card{background:#fff;border:1px solid #d8e1e5;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.04)}
+.record-image-card h3{margin:0;padding:10px 12px;font-size:13px;color:#173a38;background:#f8fbfb;border-bottom:1px solid #e3eaed}
+.record-image-frame{height:300px;background:#1f2937;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.record-image-frame img{width:100%;height:100%;object-fit:contain}
+.record-image-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;font-size:10px;color:#64748b}
+.record-images-empty{grid-column:1/-1;padding:42px 18px;text-align:center;color:#64748b;font-weight:700}
+@media(max-width:760px){
+  .record-images-window{width:calc(100% - 12px);height:94vh;margin:auto 6px;border-radius:15px}
+  .record-images-grid{grid-template-columns:1fr;padding:9px;gap:9px}
+  .record-image-frame{height:52vh;max-height:430px}
+  .record-row-actions{white-space:normal;min-width:245px}
+  .record-row-actions .btn{margin-bottom:4px}
+  .record-size{font-size:9.5px;white-space:normal}
+}
