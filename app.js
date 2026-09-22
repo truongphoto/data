@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.21
+/* GPP Data Entry Lite V1.2.22
    Giữ nguyên toàn bộ cấu trúc, OCR và rule của V1.2.20.
-   V1.2.21 chỉ bổ sung nút nhanh bật/tắt âm thanh và rung trên màn hình đầu Android.
+   V1.2.22 giữ nguyên V1.2.21 và bổ sung chia sẻ Excel từng hồ sơ qua Android Share Sheet; OCR/rule không đổi.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1538,6 +1538,7 @@ $('#cameraInput').onchange=e=>handleFile(e.target);$('#uploadInput').onchange=e=
 // IndexedDB: giữ nguyên tên DB của V1 để dữ liệu cũ tiếp tục dùng được.
 const DB_NAME='GPPDataEntryLiteV1';let dbp=null;
 const selectedSavedRecordIds=new Set();
+const renderedSavedRecordById=new Map();
 function db(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('records'))d.createObjectStore('records',{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});return dbp}
 async function putRecord(rec){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction('records','readwrite');tx.objectStore('records').put(rec);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
 async function allRecords(){const d=await db();return new Promise((res,rej)=>{const r=d.transaction('records').objectStore('records').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
@@ -1549,17 +1550,18 @@ async function saveCurrent(){
   state.updatedAt=new Date().toISOString();await putRecord(state);toast('Đã lưu hồ sơ trên thiết bị.');await renderRecords($('#searchRecords').value);return true;
 }
 async function renderRecords(q=''){
-  const arr=await allRecords();const n=noAccent(q);const body=$('#recordsBody');body.innerHTML='';
+  const arr=await allRecords();const n=noAccent(q);const body=$('#recordsBody');body.innerHTML='';renderedSavedRecordById.clear();
   const filtered=arr.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).filter(r=>!n||noAccent(Object.values(r.fields||{}).map(x=>x?.value||'').join(' ')).includes(n));
   filtered.forEach((raw,idx)=>{
-    const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';const tr=document.createElement('tr');
+    const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';renderedSavedRecordById.set(String(r.id),raw);const tr=document.createElement('tr');
     const checked=selectedSavedRecordIds.has(r.id)?' checked':'';
-    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}</td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button></td>`;body.appendChild(tr);
+    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}</td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
   });
   body.querySelectorAll('[data-record-check]').forEach(ch=>ch.onchange=()=>{if(ch.checked)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);syncRecordSelectAll();});
   body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSavedRecord(b.dataset.open));
   body.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Xóa hồ sơ này khỏi thiết bị?')){selectedSavedRecordIds.delete(b.dataset.del);await deleteRecord(b.dataset.del);await renderRecords($('#searchRecords').value);toast('Đã xóa hồ sơ.')}});
   body.querySelectorAll('[data-excel]').forEach(b=>b.onclick=()=>exportSingleSavedRecord(b.dataset.excel));
+  body.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>shareSingleSavedRecord(renderedSavedRecordById.get(String(b.dataset.share)),b));
   syncRecordSelectAll();
 }
 function syncRecordSelectAll(){
@@ -1587,6 +1589,53 @@ async function exportSingleSavedRecord(id){
   const r=hydrateState(raw),name=(r.fields.ten_co_so?.value||'Ho_So');
   const stem='GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60);
   if(exportRecordsToExcel([raw],stem||'GPP_Ho_So')){toast('Đã xuất Excel hồ sơ này.');return true;}
+  return false;
+}
+
+
+function makeSingleRecordShareFile(raw){
+  if(!raw)return null;
+  const r=hydrateState(raw);
+  const headers=['Tên cơ sở','Loại cơ sở','Điện thoại','Địa chỉ','Số CCHND','Ngày cấp CCHND','Nơi cấp CCHND','Người PTCM','Năm cấp bằng','Trường tốt nghiệp','Số ĐĐKKDD','Ngày cấp ĐĐKKDD','Số GPP','Ngày cấp GPP'];
+  const keys=['ten_co_so','loai_co_so','dien_thoai','dia_chi','so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm','nam_cap_bang','truong_tot_nghiep','so_ddkkdd','ngay_cap_ddkkdd','so_gpp','ngay_cap_gpp'];
+  const data=[headers,keys.map(k=>r.fields[k]?.value||'')];
+  const name=(r.fields.ten_co_so?.value||'Ho_So');
+  const stem=('GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)).replace(/_+$/,'')||'GPP_Ho_So';
+  const date=new Date().toISOString().slice(0,10);
+  if(window.XLSX){
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    ws['!cols']=headers.map((h,i)=>({wch:Math.max(14,Math.min(45,Math.max(h.length+2,String(data[1][i]||'').length+2)))}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Ho so');
+    const bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    return new File([bytes],`${stem}_${date}.xlsx`,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
+  const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv;charset=utf-8'});
+}
+function downloadGeneratedFile(file){
+  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function shareSingleSavedRecord(raw,button=null){
+  if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
+  let file;
+  try{file=makeSingleRecordShareFile(raw);}catch(e){console.error(e);toast('Không tạo được file Excel để chia sẻ.');return false;}
+  if(!file){toast('Không tạo được file để chia sẻ.');return false;}
+  const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
+  const shareData={title:'Hồ sơ GPP',text:`Hồ sơ GPP - ${name}`,files:[file]};
+  const supported=!!navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}));
+  if(supported){
+    try{
+      if(button)button.disabled=true;
+      await navigator.share(shareData);
+      toast('Đã mở chia sẻ. Chọn Zalo và người/nhóm cần gửi.');
+      return true;
+    }catch(e){
+      if(e?.name==='AbortError')return false;
+      console.warn('Web Share:',e);
+    }finally{if(button)button.disabled=false;}
+  }
+  downloadGeneratedFile(file);
+  toast('Trình duyệt chưa hỗ trợ chia sẻ file trực tiếp. Đã tải file Excel xuống.');
   return false;
 }
 

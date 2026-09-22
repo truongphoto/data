@@ -139,3 +139,11 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
   .mobile-quick-toggle.is-off::after{content:"";position:absolute;width:28px;height:2.5px;background:#ef4444;border-radius:99px;transform:rotate(-42deg);box-shadow:0 0 0 1px rgba(255,255,255,.55)}
   .mobile-pwa-actions{align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
 }
+
+
+/* V1.2.22: chia sẻ Excel hồ sơ qua Android Share Sheet; PC giữ giao diện V1.2.21. */
+.btn.share{display:none;background:#e0f2fe;color:#075985}
+@media(max-width:760px){
+  .record-row-actions .btn.share{display:inline-flex;align-items:center;justify-content:center;background:#e0f2fe;color:#075985}
+  .record-row-actions .btn.share:active{background:#bae6fd}
+}
