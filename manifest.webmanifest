@@ -1,5 +1,5 @@
 {
-  "name": "GPP Data Entry Lite V1.2.18",
+  "name": "GPP Data Entry Lite V1.2.20",
   "short_name": "GPP Data",
   "lang": "vi",
   "start_url": "./index.html",
@@ -8,7 +8,7 @@
   "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#0f766e",
-  "description": "Nhập hồ sơ dược bằng OCR tiếng Việt; giao diện PC giữ nguyên và có luồng chụp hồ sơ toàn màn hình trên Android.",
+  "description": "Nhập hồ sơ dược bằng OCR tiếng Việt; giao diện PC giữ nguyên, Android có chụp hồ sơ, rung/âm thanh và crop tự động tùy chọn.",
   "icons": [
     {"src":"assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
     {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}

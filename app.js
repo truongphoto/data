@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.18
+/* GPP Data Entry Lite V1.2.19
    Giữ nguyên toàn bộ cấu trúc, OCR và rule của V1.2.16 FINAL.
-   V1.2.18 giữ nguyên OCR/rule V1.2.17; chỉ bổ sung giao diện Android/PWA, camera toàn màn hình + crop theo khung và logo.
+   V1.2.19 giữ nguyên OCR/rule V1.2.18; chỉ bổ sung phản hồi chạm/chụp, cài đặt crop và xuất hồ sơ có chọn.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1537,6 +1537,7 @@ $('#cameraInput').onchange=e=>handleFile(e.target);$('#uploadInput').onchange=e=
 
 // IndexedDB: giữ nguyên tên DB của V1 để dữ liệu cũ tiếp tục dùng được.
 const DB_NAME='GPPDataEntryLiteV1';let dbp=null;
+const selectedSavedRecordIds=new Set();
 function db(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('records'))d.createObjectStore('records',{keyPath:'id'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});return dbp}
 async function putRecord(rec){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction('records','readwrite');tx.objectStore('records').put(rec);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
 async function allRecords(){const d=await db();return new Promise((res,rej)=>{const r=d.transaction('records').objectStore('records').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
@@ -1549,24 +1550,54 @@ async function saveCurrent(){
 }
 async function renderRecords(q=''){
   const arr=await allRecords();const n=noAccent(q);const body=$('#recordsBody');body.innerHTML='';
-  arr.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).filter(r=>!n||noAccent(Object.values(r.fields||{}).map(x=>x?.value||'').join(' ')).includes(n)).forEach((raw,idx)=>{
+  const filtered=arr.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).filter(r=>!n||noAccent(Object.values(r.fields||{}).map(x=>x?.value||'').join(' ')).includes(n));
+  filtered.forEach((raw,idx)=>{
     const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${idx+1}</td><td>${esc(v('ten_co_so'))}</td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button></td>`;body.appendChild(tr);
+    const checked=selectedSavedRecordIds.has(r.id)?' checked':'';
+    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}</td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button></td>`;body.appendChild(tr);
   });
+  body.querySelectorAll('[data-record-check]').forEach(ch=>ch.onchange=()=>{if(ch.checked)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);syncRecordSelectAll();});
   body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSavedRecord(b.dataset.open));
-  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Xóa hồ sơ này khỏi thiết bị?')){await deleteRecord(b.dataset.del);await renderRecords($('#searchRecords').value);toast('Đã xóa hồ sơ.')}});
+  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Xóa hồ sơ này khỏi thiết bị?')){selectedSavedRecordIds.delete(b.dataset.del);await deleteRecord(b.dataset.del);await renderRecords($('#searchRecords').value);toast('Đã xóa hồ sơ.')}});
+  body.querySelectorAll('[data-excel]').forEach(b=>b.onclick=()=>exportSingleSavedRecord(b.dataset.excel));
+  syncRecordSelectAll();
+}
+function syncRecordSelectAll(){
+  const all=[...document.querySelectorAll('#recordsBody [data-record-check]')],master=$('#recordSelectAll');if(!master)return;
+  const n=all.filter(x=>x.checked).length;master.checked=all.length>0&&n===all.length;master.indeterminate=n>0&&n<all.length;
+}
+function setVisibleRecordSelection(on){
+  document.querySelectorAll('#recordsBody [data-record-check]').forEach(ch=>{ch.checked=!!on;if(on)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);});syncRecordSelectAll();
 }
 async function openSavedRecord(id){
   const raw=await getRecord(id);if(!raw)return;state=hydrateState(raw);activeDoc=null;activeImage=null;previewZoom=1;currentEvidence=null;renderAll();closeModal('recordsModal');openRecordSheet();toast('Đã mở hồ sơ.');
 }
 function newRecord(){if(confirm('Tạo hồ sơ mới? Dữ liệu chưa lưu hiện tại sẽ bị bỏ.')){state=freshState();activeDoc=null;activeImage=null;previewZoom=1;currentEvidence=null;renderAll();switchMobileTab('docs');}}
-async function exportExcel(){
-  const arr=await allRecords();if(!arr.length){toast('Chưa có hồ sơ để xuất.');return}
+function exportRecordsToExcel(records,fileStem='GPP_Data_Entry'){
+  if(!records?.length){toast('Chưa có hồ sơ để xuất.');return false;}
   const headers=['Tên cơ sở','Loại cơ sở','Điện thoại','Địa chỉ','Số CCHND','Ngày cấp CCHND','Nơi cấp CCHND','Người PTCM','Năm cấp bằng','Trường tốt nghiệp','Số ĐĐKKDD','Ngày cấp ĐĐKKDD','Số GPP','Ngày cấp GPP'];
   const keys=['ten_co_so','loai_co_so','dien_thoai','dia_chi','so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm','nam_cap_bang','truong_tot_nghiep','so_ddkkdd','ngay_cap_ddkkdd','so_gpp','ngay_cap_gpp'];
-  const data=[headers,...arr.map(raw=>{const r=hydrateState(raw);return keys.map(k=>r.fields[k]?.value||'')})];
-  if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet(data);ws['!cols']=headers.map((h,i)=>({wch:Math.max(14,Math.min(45,Math.max(h.length+2,...data.slice(1).map(row=>String(row[i]||'').length+2))))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Ho so');XLSX.writeFile(wb,`GPP_Data_Entry_${new Date().toISOString().slice(0,10)}.xlsx`);}else{const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));a.download='GPP_Data_Entry.csv';a.click();}
+  const data=[headers,...records.map(raw=>{const r=hydrateState(raw);return keys.map(k=>r.fields[k]?.value||'')})];
+  const date=new Date().toISOString().slice(0,10),safeStem=String(fileStem||'GPP_Data_Entry').replace(/[^\w\-]+/g,'_');
+  if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet(data);ws['!cols']=headers.map((h,i)=>({wch:Math.max(14,Math.min(45,Math.max(h.length+2,...data.slice(1).map(row=>String(row[i]||'').length+2))))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Ho so');XLSX.writeFile(wb,`${safeStem}_${date}.xlsx`);}else{const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));a.download=`${safeStem}_${date}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+  return true;
 }
+async function exportSingleSavedRecord(id){
+  const raw=await getRecord(id);if(!raw){toast('Không tìm thấy hồ sơ để xuất.');return false;}
+  const r=hydrateState(raw),name=(r.fields.ten_co_so?.value||'Ho_So');
+  const stem='GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60);
+  if(exportRecordsToExcel([raw],stem||'GPP_Ho_So')){toast('Đã xuất Excel hồ sơ này.');return true;}
+  return false;
+}
+
+async function exportExcel(){return exportRecordsToExcel(await allRecords(),'GPP_Data_Entry');}
+async function exportSelectedSavedRecords(){
+  if(!selectedSavedRecordIds.size){toast('Hãy đánh dấu ít nhất một hồ sơ cần xuất.');return;}
+  const arr=(await allRecords()).filter(r=>selectedSavedRecordIds.has(r.id));
+  if(exportRecordsToExcel(arr,arr.length===1?'GPP_Ho_So_Da_Chon':'GPP_Cac_Ho_So_Da_Chon'))toast(`Đã xuất ${arr.length} hồ sơ được đánh dấu.`);
+}
+async function exportAllSavedRecords(){const arr=await allRecords();if(exportRecordsToExcel(arr,'GPP_Tat_Ca_Ho_So'))toast(`Đã xuất ${arr.length} hồ sơ.`);}
+
 
 function openModal(id){const m=$('#'+id);m.classList.add('open');m.setAttribute('aria-hidden','false');}
 function closeModal(id){const m=$('#'+id);m.classList.remove('open');m.setAttribute('aria-hidden','true');}
@@ -1612,6 +1643,7 @@ document.addEventListener('drop',e=>{if(e.dataTransfer?.types?.includes('Files')
 
 // Nút / modal / mobile
 $('#btnNew').onclick=newRecord;$('#btnSave').onclick=saveCurrent;$('#btnExport').onclick=exportExcel;$('#btnRecords').onclick=openRecordsModal;$('#btnRecordsMobile').onclick=openRecordsModal;$('#searchRecords').oninput=e=>renderRecords(e.target.value);$('#btnSaveSheet').onclick=async()=>{renderFields();if(await saveCurrent()){openRecordSheet();toast('Đã lưu thay đổi của hồ sơ.')}};
+$('#btnExportSelectedSaved').onclick=exportSelectedSavedRecords;$('#btnExportAllSaved').onclick=exportAllSavedRecords;$('#recordSelectAll').onchange=e=>setVisibleRecordSelection(e.target.checked);
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=()=>closeModal(b.dataset.closeModal));
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('mousedown',e=>{if(e.target===m)closeModal(m.id)}));
 document.querySelectorAll('[data-mobile-tab]').forEach(b=>b.onclick=()=>switchMobileTab(b.dataset.mobileTab));
@@ -1619,10 +1651,28 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 
 
 /* ================================================================
-   V1.2.18 - Android/PWA capture layer. OCR/rule V1.2.17 không đổi.
+   V1.2.19 - Android/PWA capture layer. OCR/rule không đổi.
    ================================================================ */
 const MOBILE_CAPTURE_ORDER=['cchnd','gpkd','bang','ddkkdd','gpp'];
 let mobileCameraStream=null,mobileCaptureIndex=0,mobileSingleDoc=null,deferredInstallPrompt=null,pwaRegistration=null;
+const MOBILE_SETTINGS_KEY='gpp_mobile_settings_v1219';
+let mobileSettings=(()=>{try{return {autoCrop:true,...JSON.parse(localStorage.getItem(MOBILE_SETTINGS_KEY)||'{}')}}catch(e){return {autoCrop:true}}})();
+let shutterAudioContext=null;
+function saveMobileSettings(){try{localStorage.setItem(MOBILE_SETTINGS_KEY,JSON.stringify(mobileSettings))}catch(e){}}
+function syncMobileSettingsUI(){const el=$('#settingAutoCrop');if(el)el.checked=mobileSettings.autoCrop!==false;}
+function openSettingsModal(){syncMobileSettingsUI();openModal('settingsModal');}
+function lightHaptic(ms=10){if(isMobileCaptureEnvironment()&&navigator.vibrate)try{navigator.vibrate(ms)}catch(e){}}
+function playShutterFeedback(){
+  if(navigator.vibrate)try{navigator.vibrate([34,28,52])}catch(e){}
+  const cap=$('#mobileCapture');if(cap){cap.classList.remove('camera-flash');void cap.offsetWidth;cap.classList.add('camera-flash');setTimeout(()=>cap.classList.remove('camera-flash'),220);}
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    shutterAudioContext=shutterAudioContext||new AC();const ctx=shutterAudioContext;if(ctx.state==='suspended')ctx.resume();
+    const burst=(when,dur,gain)=>{const n=Math.max(1,Math.floor(ctx.sampleRate*dur)),buf=ctx.createBuffer(1,n,ctx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);const src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();filter.type='bandpass';filter.frequency.value=1450;filter.Q.value=.75;g.gain.setValueAtTime(gain,when);g.gain.exponentialRampToValueAtTime(.001,when+dur);src.buffer=buf;src.connect(filter).connect(g).connect(ctx.destination);src.start(when);src.stop(when+dur+.01);};
+    const t=ctx.currentTime+.005;burst(t,.045,.18);burst(t+.07,.055,.12);
+  }catch(e){}
+}
+
 function isMobileCaptureEnvironment(){
   return window.matchMedia('(max-width:760px)').matches||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
 }
@@ -1668,7 +1718,6 @@ function stopMobileCamera(){
 function closeMobileCamera(showMain=true){
   stopMobileCamera();document.body.classList.remove('mobile-camera-open');
   const el=$('#mobileCapture');if(el)el.setAttribute('aria-hidden','true');
-  try{if(document.fullscreenElement)document.exitFullscreen?.();}catch(e){}
   mobileSingleDoc=null;
   if(showMain){setMobileIntro(false);switchMobileTab('docs');}
 }
@@ -1689,7 +1738,6 @@ async function openMobileCamera(singleDoc=null){
   mobileSingleDoc=singleDoc;if(singleDoc)mobileCaptureIndex=Math.max(0,MOBILE_CAPTURE_ORDER.indexOf(singleDoc));
   updateMobileCaptureLabels();setMobileIntro(false);document.body.classList.add('mobile-camera-open');
   $('#mobileCapture').setAttribute('aria-hidden','false');
-  try{await $('#mobileCapture').requestFullscreen?.();}catch(e){}
   try{await startMobileCameraStream();}
   catch(e){
     console.warn('Camera trực tiếp:',e);document.body.classList.remove('mobile-camera-open');
@@ -1703,12 +1751,15 @@ function frameCropToFile(){
   if(!v||!frame||!v.videoWidth||!v.videoHeight)throw new Error('Camera chưa sẵn sàng.');
   const vr=v.getBoundingClientRect(),fr=frame.getBoundingClientRect();
   const vw=v.videoWidth,vh=v.videoHeight;
-  // video dùng object-fit:cover: ánh xạ khung màn hình ngược về pixel camera.
-  const scale=Math.max(vr.width/vw,vr.height/vh);
-  const shownW=vw*scale,shownH=vh*scale;
-  const offsetX=vr.left+(vr.width-shownW)/2,offsetY=vr.top+(vr.height-shownH)/2;
-  let sx=(fr.left-offsetX)/scale,sy=(fr.top-offsetY)/scale,sw=fr.width/scale,sh=fr.height/scale;
-  sx=Math.max(0,Math.min(vw-1,sx));sy=Math.max(0,Math.min(vh-1,sy));sw=Math.max(1,Math.min(vw-sx,sw));sh=Math.max(1,Math.min(vh-sy,sh));
+  let sx=0,sy=0,sw=vw,sh=vh;
+  if(mobileSettings.autoCrop!==false){
+    // video dùng object-fit:cover: ánh xạ khung màn hình ngược về pixel camera.
+    const scale=Math.max(vr.width/vw,vr.height/vh);
+    const shownW=vw*scale,shownH=vh*scale;
+    const offsetX=vr.left+(vr.width-shownW)/2,offsetY=vr.top+(vr.height-shownH)/2;
+    sx=(fr.left-offsetX)/scale;sy=(fr.top-offsetY)/scale;sw=fr.width/scale;sh=fr.height/scale;
+    sx=Math.max(0,Math.min(vw-1,sx));sy=Math.max(0,Math.min(vh-1,sy));sw=Math.max(1,Math.min(vw-sx,sw));sh=Math.max(1,Math.min(vh-sy,sh));
+  }
   const maxSide=2400,down=Math.min(1,maxSide/Math.max(sw,sh));
   const c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw*down));c.height=Math.max(1,Math.round(sh*down));
   c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);
@@ -1716,6 +1767,7 @@ function frameCropToFile(){
 }
 async function shootMobileDocument(){
   const k=mobileSingleDoc||MOBILE_CAPTURE_ORDER[mobileCaptureIndex];if(!k)return;
+  playShutterFeedback();
   const btn=$('#btnShootMobileDoc');if(btn)btn.disabled=true;
   try{
     const file=await frameCropToFile();await processImage(k,file);
@@ -1749,6 +1801,10 @@ function handleMobileFallback(input){
   }
 }
 $('#btnMobileStart').onclick=startMobileProfileFlow;
+$('#btnMobileRecordsHome').onclick=async()=>{setMobileIntro(false);await openRecordsModal();};
+$('#btnMobileSettings').onclick=openSettingsModal;
+$('#btnMobileCaptureSettings').onclick=openSettingsModal;
+$('#settingAutoCrop').onchange=e=>{mobileSettings.autoCrop=!!e.target.checked;saveMobileSettings();toast(mobileSettings.autoCrop?'Tự động crop: Bật':'Tự động crop: Tắt');};
 $('#btnCloseMobileCamera').onclick=()=>closeMobileCamera(true);
 $('#btnSkipMobileDoc').onclick=skipMobileDocument;
 $('#btnShootMobileDoc').onclick=shootMobileDocument;
@@ -1756,6 +1812,10 @@ $('#btnPwaInstall').onclick=installPWA;
 $('#btnPwaUpdate').onclick=applyPWAUpdate;
 $('#mobileCameraFallback').onchange=e=>handleMobileFallback(e.target);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&document.body.classList.contains('mobile-camera-open')){/* Android có thể tạm ẩn app khi cấp quyền; không tự đóng camera. */}});
+// V1.2.19: tất cả nút trên điện thoại có phản hồi nhẹ; nút chụp dùng rung/âm thanh riêng.
+document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('button');if(!b||b.disabled)return;b.classList.add('tap-feedback');setTimeout(()=>b.classList.remove('tap-feedback'),130);},{passive:true});
+document.addEventListener('click',e=>{const b=e.target.closest?.('button');if(!b||b.disabled||b.id==='btnShootMobileDoc')return;lightHaptic(9);},{passive:true});
+syncMobileSettingsUI();
 if(isMobileCaptureEnvironment())setMobileIntro(true);else setMobileIntro(false);
 registerPWAUpdateFlow();
 renderAll();

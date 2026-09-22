@@ -43,7 +43,7 @@
 
 
 /* ================================================================
-   V1.2.18 - Mobile capture/PWA layer. Không thay đổi giao diện PC.
+   V1.2.19 - Mobile capture/PWA layer. Không thay đổi OCR/rule.
    ================================================================ */
 .brand{display:flex;align-items:center;gap:9px;min-width:0}
 .brand-logo{width:52px;height:52px;object-fit:contain;border-radius:9px;flex:0 0 auto;background:#fff}
@@ -84,3 +84,48 @@
 @media(max-width:760px) and (orientation:landscape){
   .mobile-capture-frame{top:8vh;bottom:18vh;left:16vw;right:16vw;height:auto;transform:none}
 }
+
+
+/* ================================================================
+   V1.2.19 - phản hồi chạm, cài đặt crop, hồ sơ lưu & xuất có chọn.
+   ================================================================ */
+button{touch-action:manipulation;transition:transform .09s ease,filter .09s ease,box-shadow .12s ease,background-color .12s ease}
+button:not(:disabled):active{transform:scale(.97);filter:brightness(.96)}
+button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
+.records-actions{flex-wrap:wrap;justify-content:flex-end}
+.record-check-col{width:42px!important;text-align:center!important}
+.records-table td:first-child{text-align:center}
+.records-table th:nth-child(2){width:46px}
+.records-table th:nth-child(3){width:24%}
+.records-table th:nth-child(8){width:145px}
+.records-table th:nth-child(9){width:205px}
+.settings-window{width:min(560px,100%);height:auto;max-height:min(520px,100%)}
+.settings-body{padding:16px;background:#f7fafb}
+.setting-row{display:flex;align-items:center;justify-content:space-between;gap:18px;background:#fff;border:1px solid #d6e0e4;border-radius:12px;padding:15px;cursor:pointer}
+.setting-row span{display:flex;flex-direction:column;gap:4px}
+.setting-row strong{font-size:14px;color:#1f2937}
+.setting-row small{font-size:11px;color:#64748b;line-height:1.35}
+.setting-switch{width:24px;height:24px;accent-color:var(--green);flex:0 0 auto}
+
+@media(max-width:760px){
+  .mobile-home-secondary{width:min(88vw,420px);min-height:50px;margin-top:12px;border:1px solid #b9d5d2;border-radius:15px;background:#effcf9;color:#0f5e58;font-size:16px;font-weight:900;padding:10px 16px}
+  .mobile-capture::after{content:"";position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
+  .mobile-capture.camera-flash::after{animation:gppCameraFlash .18s ease-out}
+  @keyframes gppCameraFlash{0%{opacity:0}35%{opacity:.92}100%{opacity:0}}
+  .mobile-capture-top{display:grid;grid-template-columns:44px 1fr 44px;gap:10px}
+  .mobile-capture-counter{justify-self:center}
+  .mobile-camera-settings{font-size:20px;justify-self:end}
+  .mobile-camera-spacer{width:86px;min-height:48px}
+  .settings-window{height:auto;max-height:78vh;border-radius:16px;margin:auto 10px;width:calc(100% - 20px)}
+  .settings-body{padding:12px}
+  .record-check-col{position:sticky;left:0;background:#eaf1f3!important;z-index:3!important}
+  .records-actions .search{flex-basis:100%}
+  .records-actions .btn{flex:1 1 30%;min-width:110px}
+}
+
+/* V1.2.20: xuất Excel nhanh từng hồ sơ */
+.record-row-actions{white-space:nowrap}
+.record-row-actions .btn{margin-right:3px}
+.record-row-actions .btn:last-child{margin-right:0}
+.btn.excel{background:#dcfce7;color:#166534}
+.btn.excel:hover{background:#bbf7d0}

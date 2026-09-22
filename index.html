@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>GPP Data Entry Lite V1.2.18</title>
+  <title>GPP Data Entry Lite V1.2.20</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -16,23 +16,26 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <!-- V1.2.18: màn hình khởi động riêng cho điện thoại/PWA. PC không hiển thị lớp này. -->
+  <!-- V1.2.20: giữ nguyên OCR/rule V1.2.19; thêm xuất Excel nhanh từng hồ sơ lưu. -->
   <section id="mobileIntro" class="mobile-intro" aria-hidden="true">
     <img class="mobile-intro-logo" src="assets/logo-full.jpg" alt="Trường GPP" />
     <button id="btnMobileStart" class="mobile-start-btn" type="button">Bắt đầu nhập hồ sơ</button>
-    <div class="mobile-pwa-actions" aria-label="Cài đặt và cập nhật ứng dụng">
+    <button id="btnMobileRecordsHome" class="mobile-home-secondary" type="button">Hồ sơ lưu</button>
+    <div class="mobile-pwa-actions" aria-label="Cài đặt, cài ứng dụng và cập nhật">
+      <button id="btnMobileSettings" class="mobile-pwa-btn" type="button">Cài đặt</button>
       <button id="btnPwaInstall" class="mobile-pwa-btn" type="button" hidden>Cài đặt ứng dụng</button>
       <button id="btnPwaUpdate" class="mobile-pwa-btn" type="button" hidden>Cập nhật</button>
     </div>
   </section>
 
-  <!-- V1.2.18: camera toàn màn hình trên Android/PWA, crop đúng theo khung chụp. -->
+  <!-- V1.2.20: camera phủ toàn màn hình bằng CSS, không gọi Fullscreen API. -->
   <section id="mobileCapture" class="mobile-capture" aria-hidden="true">
     <video id="mobileCameraVideo" autoplay playsinline muted></video>
     <div id="mobileCaptureFrame" class="mobile-capture-frame" aria-hidden="true"></div>
     <div class="mobile-capture-top">
       <button id="btnCloseMobileCamera" class="mobile-camera-icon" type="button" aria-label="Đóng camera">×</button>
       <div id="mobileCaptureCounter" class="mobile-capture-counter">1/5</div>
+      <button id="btnMobileCaptureSettings" class="mobile-camera-icon mobile-camera-settings" type="button" aria-label="Cài đặt">⚙</button>
     </div>
     <div class="mobile-capture-bottom">
       <button id="btnSkipMobileDoc" class="mobile-camera-secondary" type="button">Bỏ qua</button>
@@ -40,7 +43,7 @@
         <span>CHỤP</span>
         <strong id="mobileCaptureDocName">Chứng chỉ hành nghề dược</strong>
       </button>
-      <button id="btnMobileFlashInfo" class="mobile-camera-secondary" type="button" disabled>Tự crop</button>
+      <div class="mobile-camera-spacer" aria-hidden="true"></div>
     </div>
   </section>
 
@@ -48,12 +51,12 @@
     <div class="brand">
       <img class="brand-logo" src="assets/logo-full.jpg" alt="Logo Trường GPP" />
       <div class="brand-copy">
-        <h1>GPP Data Entry Lite <span>V1.2.18</span></h1>
+        <h1>GPP Data Entry Lite <span>V1.2.20</span></h1>
         <p>5 loại giấy • 14 trường • chọn giấy trước khi quét • có thể sửa trực tiếp</p>
       </div>
     </div>
     <div class="top-actions">
-      <button id="btnRecords" class="btn secondary">Hồ sơ đã lưu</button>
+      <button id="btnRecords" class="btn secondary">Hồ sơ lưu</button>
       <button id="btnNew" class="btn secondary">Hồ sơ mới</button>
       <button id="btnSave" class="btn primary">Lưu hồ sơ</button>
       <button id="btnExport" class="btn secondary">Xuất Excel</button>
@@ -111,7 +114,7 @@
     <button class="mobile-tab active" data-mobile-tab="docs">Tài liệu</button>
     <button class="mobile-tab" data-mobile-tab="image">Ảnh</button>
     <button class="mobile-tab" data-mobile-tab="fields">Dữ liệu</button>
-    <button class="mobile-tab" id="btnRecordsMobile">Hồ sơ</button>
+    <button class="mobile-tab" id="btnRecordsMobile">Hồ sơ lưu</button>
   </nav>
 
   <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
@@ -124,16 +127,18 @@
       <div class="modal-header">
         <div>
           <h2>Hồ sơ đã lưu</h2>
-          <p>Mở hồ sơ để xem toàn bộ dữ liệu trong cửa sổ dạng Excel.</p>
+          <p>Mở hồ sơ, đánh dấu hồ sơ cần xuất hoặc xuất toàn bộ dữ liệu đã lưu.</p>
         </div>
-        <div class="modal-actions">
+        <div class="modal-actions records-actions">
           <input id="searchRecords" class="search" placeholder="Tìm tên cơ sở, số GPP, CCHND..." />
+          <button id="btnExportSelectedSaved" class="btn secondary" type="button">Xuất đã đánh dấu</button>
+          <button id="btnExportAllSaved" class="btn secondary" type="button">Xuất tất cả</button>
           <button class="btn secondary" data-close-modal="recordsModal">Đóng</button>
         </div>
       </div>
       <div class="excel-wrap no-scrollbar">
         <table class="excel-table records-table">
-          <thead><tr><th>STT</th><th>Tên cơ sở</th><th>Loại</th><th>Số CCHND</th><th>Số ĐĐKKDD</th><th>Số GPP</th><th>Cập nhật</th><th>Thao tác</th></tr></thead>
+          <thead><tr><th class="record-check-col"><input id="recordSelectAll" type="checkbox" aria-label="Đánh dấu tất cả hồ sơ đang hiển thị" /></th><th>STT</th><th>Tên cơ sở</th><th>Loại</th><th>Số CCHND</th><th>Số ĐĐKKDD</th><th>Số GPP</th><th>Cập nhật</th><th>Thao tác</th></tr></thead>
           <tbody id="recordsBody"></tbody>
         </table>
       </div>
@@ -158,6 +163,29 @@
           <thead><tr><th class="col-no">STT</th><th>Trường dữ liệu</th><th>Nội dung</th><th class="col-status">Trạng thái</th></tr></thead>
           <tbody id="recordSheetBody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal" aria-hidden="true">
+    <div class="modal-card settings-window">
+      <div class="modal-header">
+        <div>
+          <h2>Cài đặt</h2>
+          <p>Các tùy chọn chụp ảnh trên điện thoại.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn secondary" data-close-modal="settingsModal">Đóng</button>
+        </div>
+      </div>
+      <div class="settings-body">
+        <label class="setting-row" for="settingAutoCrop">
+          <span>
+            <strong>Tự động crop theo khung chụp</strong>
+            <small>Mặc định bật. Khi tắt, ảnh camera được giữ toàn khung hình.</small>
+          </span>
+          <input id="settingAutoCrop" class="setting-switch" type="checkbox" checked />
+        </label>
       </div>
     </div>
   </div>
