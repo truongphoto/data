@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.25
+/* GPP Data Entry Lite V1.2.27
    Nền OCR/rule giữ nguyên V1.2.24.
-   V1.2.25 chỉ bổ sung 2 cách chia sẻ trên Android: toàn bộ hồ sơ và riêng dữ liệu Excel.
+   V1.2.27 giữ nguyên toàn bộ V1.2.26; Chia sẻ hồ sơ chỉ gửi CSV + ảnh, bỏ TXT theo yêu cầu người dùng.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1741,7 +1741,7 @@ function makeSingleRecordShareFile(raw){
     return new File([bytes],`${stem}_${date}.xlsx`,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   }
   const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
-  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv;charset=utf-8'});
+  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv'});
 }
 function downloadGeneratedFile(file){
   const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
@@ -1754,12 +1754,12 @@ function makeSingleRecordCsvShareFileV1225(raw){
   const name=r.fields.ten_co_so?.value||'Ho_So',stem=('GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)).replace(/_+$/,'')||'GPP_Ho_So';
   const date=new Date().toISOString().slice(0,10),data=[headers,keys.map(k=>r.fields[k]?.value||'')];
   const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
-  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv;charset=utf-8'});
+  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv'});
 }
 function makeRecordInfoShareFileV1225(raw){
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
   const lines=[`Tên cơ sở: ${name}`,`Ban hành: ${r.banHanh?.value||''}`,`Ngày chia sẻ: ${new Date().toLocaleString('vi-VN')}`,`Số ảnh: ${recordImageEntriesV1223(raw).length}`].join('\r\n');
-  return new File([lines],'THONG_TIN_HO_SO.txt',{type:'text/plain;charset=utf-8'});
+  return new File([lines],'THONG_TIN_HO_SO.txt',{type:'text/plain'});
 }
 function makeRecordImageShareFilesV1225(raw){
   return recordImageEntriesV1223(raw).map(({key,doc,blob})=>{
@@ -1787,31 +1787,30 @@ async function invokeShareV1225(files,title,textValue,button,successText){
 async function shareExcelSavedRecordV1225(raw,button=null){
   if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
-  let excel=null,csv=null;
-  try{excel=makeSingleRecordShareFile(raw);csv=makeSingleRecordCsvShareFileV1225(raw);}catch(e){console.error(e);toast('Không tạo được dữ liệu để chia sẻ.');return false;}
-  if(excel&&await invokeShareV1225([excel],'Hồ sơ GPP',`Excel hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ Excel.'))return true;
+  let csv=null,excel=null;
+  try{csv=makeSingleRecordCsvShareFileV1225(raw);excel=makeSingleRecordShareFile(raw);}catch(e){console.error(e);toast('Không tạo được dữ liệu để chia sẻ.');return false;}
+  // Chrome Android Web Share hỗ trợ text/csv ổn định hơn XLSX. CSV vẫn mở trực tiếp bằng Excel.
   if(csv&&await invokeShareV1225([csv],'Hồ sơ GPP',`Dữ liệu hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ. File CSV có thể mở bằng Excel.'))return true;
+  // Fallback chỉ tải xuống nếu Web Share không khả dụng/không nhận file.
   if(excel)downloadGeneratedFile(excel);else if(csv)downloadGeneratedFile(csv);
-  toast('Thiết bị chưa cho chia sẻ file trực tiếp. Đã tải file xuống để bạn chia sẻ từ Tải xuống.');
+  toast('Không mở được bảng chia sẻ trực tiếp. Đã tải file xuống để bạn chia sẻ từ Tải xuống.');
   return false;
 }
 async function shareWholeSavedRecordV1225(raw,button=null){
   if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
-  let excel=null,csv=null,info=null,images=[];
+  let csv=null,images=[];
   try{
-    excel=makeSingleRecordShareFile(raw);
     csv=makeSingleRecordCsvShareFileV1225(raw);
-    info=makeRecordInfoShareFileV1225(raw);
     images=makeRecordImageShareFilesV1225(raw);
   }catch(e){console.error(e);toast('Không chuẩn bị được hồ sơ để chia sẻ.');return false;}
-  // Ưu tiên đúng Excel + toàn bộ ảnh. Nếu trình duyệt từ chối XLSX thì dùng CSV tương thích Excel.
-  const fullExcel=[excel,...images,info].filter(Boolean);
-  if(await invokeShareV1225(fullExcel,'Hồ sơ GPP',`Toàn bộ hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ toàn bộ hồ sơ.'))return true;
-  const compatible=[csv,...images,info].filter(Boolean);
+  // V1.2.27: Chia sẻ hồ sơ chỉ gồm CSV + ảnh, không kèm TXT. Người dùng tự chọn ứng dụng nhận.
+  const compatible=[csv,...images].filter(Boolean);
   if(await invokeShareV1225(compatible,'Hồ sơ GPP',`Toàn bộ hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ toàn bộ hồ sơ.'))return true;
-  // Nếu Web Share không nhận nhiều file, tải ZIP lưu trữ để người dùng chia sẻ từ ứng dụng Tệp.
-  toast('Đang tạo gói hồ sơ để lưu/chia sẻ...');
+  // Một số máy không nhận nhiều file cùng lúc: thử chia sẻ riêng CSV trước.
+  if(csv&&await invokeShareV1225([csv],'Hồ sơ GPP',`Dữ liệu hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ dữ liệu hồ sơ.'))return true;
+  // Cuối cùng tạo ZIP để lưu/chia sẻ thủ công từ ứng dụng Tệp.
+  toast('Không mở được bảng chia sẻ nhiều file. Đang tạo gói hồ sơ để lưu/chia sẻ...');
   return downloadRecordPackageV1223(raw.id,button);
 }
 

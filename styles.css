@@ -141,7 +141,7 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
 }
 
 
-/* V1.2.25: 2 kiểu chia sẻ trên Android; PC giữ nguyên giao diện. */
+/* V1.2.27: giữ giao diện V1.2.26; Chia sẻ hồ sơ chỉ CSV + ảnh. */
 .btn.share{display:none;background:#e0f2fe;color:#075985}
 @media(max-width:760px){
   .record-row-actions .btn.share{display:inline-flex;align-items:center;justify-content:center}
