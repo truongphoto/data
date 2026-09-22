@@ -141,11 +141,14 @@ button.tap-feedback{transform:scale(.965);filter:brightness(.95)}
 }
 
 
-/* V1.2.22: chia sẻ Excel hồ sơ qua Android Share Sheet; PC giữ giao diện V1.2.21. */
+/* V1.2.25: 2 kiểu chia sẻ trên Android; PC giữ nguyên giao diện. */
 .btn.share{display:none;background:#e0f2fe;color:#075985}
 @media(max-width:760px){
-  .record-row-actions .btn.share{display:inline-flex;align-items:center;justify-content:center;background:#e0f2fe;color:#075985}
-  .record-row-actions .btn.share:active{background:#bae6fd}
+  .record-row-actions .btn.share{display:inline-flex;align-items:center;justify-content:center}
+  .record-row-actions .btn.share-record{background:#dcfce7;color:#166534}
+  .record-row-actions .btn.share-excel{background:#e0f2fe;color:#075985}
+  .record-row-actions .btn.share-record:active{background:#bbf7d0}
+  .record-row-actions .btn.share-excel:active{background:#bae6fd}
 }
 
 

@@ -1,6 +1,6 @@
-/* GPP Data Entry Lite V1.2.22
-   Giữ nguyên toàn bộ cấu trúc, OCR và rule của V1.2.20.
-   V1.2.22 giữ nguyên V1.2.21 và bổ sung chia sẻ Excel từng hồ sơ qua Android Share Sheet; OCR/rule không đổi.
+/* GPP Data Entry Lite V1.2.25
+   Nền OCR/rule giữ nguyên V1.2.24.
+   V1.2.25 chỉ bổ sung 2 cách chia sẻ trên Android: toàn bộ hồ sơ và riêng dữ liệu Excel.
 */
 const DOCS = {
   cchnd: {name:'Chứng chỉ hành nghề dược', fields:['so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm']},
@@ -1683,7 +1683,7 @@ async function renderRecords(q=''){
     const r=hydrateState(raw),v=k=>r.fields[k]?.value||'';renderedSavedRecordById.set(String(r.id),raw);const tr=document.createElement('tr');
     const checked=selectedSavedRecordIds.has(r.id)?' checked':'';
     const sizeText=formatBytesV1223(recordStorageBytesV1223(raw));
-    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}<div class="record-size">Dung lượng hồ sơ: ${sizeText}</div></td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small images" data-images="${r.id}">Xem ảnh</button> <button class="btn small package" data-package="${r.id}">Tải gói</button> <button class="btn small share" data-share="${r.id}" title="Mở bảng chia sẻ Android; chọn Zalo để gửi">Chia sẻ Zalo</button></td>`;body.appendChild(tr);
+    tr.innerHTML=`<td><input type="checkbox" data-record-check="${r.id}" aria-label="Đánh dấu hồ sơ ${idx+1}"${checked}></td><td>${idx+1}</td><td>${esc(v('ten_co_so'))}<div class="record-size">Dung lượng hồ sơ: ${sizeText}</div></td><td>${esc(v('loai_co_so'))}</td><td>${esc(v('so_cchnd'))}</td><td>${esc(v('so_ddkkdd'))}</td><td>${esc(v('so_gpp'))}</td><td>${r.updatedAt?new Date(r.updatedAt).toLocaleString('vi-VN'):''}</td><td class="record-row-actions"><button class="btn small secondary" data-open="${r.id}">Mở</button> <button class="btn small danger" data-del="${r.id}">Xóa</button> <button class="btn small excel" data-excel="${r.id}">Excel</button> <button class="btn small images" data-images="${r.id}">Xem ảnh</button> <button class="btn small package" data-package="${r.id}">Tải gói</button> <button class="btn small share share-record" data-share-record="${r.id}" title="Chia sẻ toàn bộ hồ sơ qua bảng chia sẻ Android">Chia sẻ hồ sơ</button> <button class="btn small share share-excel" data-share-excel="${r.id}" title="Chia sẻ dữ liệu Excel qua bảng chia sẻ Android">Chia sẻ Excel</button></td>`;body.appendChild(tr);
   });
   body.querySelectorAll('[data-record-check]').forEach(ch=>ch.onchange=()=>{if(ch.checked)selectedSavedRecordIds.add(ch.dataset.recordCheck);else selectedSavedRecordIds.delete(ch.dataset.recordCheck);syncRecordSelectAll();});
   body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSavedRecord(b.dataset.open));
@@ -1691,7 +1691,8 @@ async function renderRecords(q=''){
   body.querySelectorAll('[data-excel]').forEach(b=>b.onclick=()=>exportSingleSavedRecord(b.dataset.excel));
   body.querySelectorAll('[data-images]').forEach(b=>b.onclick=()=>openSavedRecordImagesV1223(b.dataset.images));
   body.querySelectorAll('[data-package]').forEach(b=>b.onclick=()=>downloadRecordPackageV1223(b.dataset.package,b));
-  body.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>shareSingleSavedRecord(renderedSavedRecordById.get(String(b.dataset.share)),b));
+  body.querySelectorAll('[data-share-record]').forEach(b=>b.onclick=()=>shareWholeSavedRecordV1225(renderedSavedRecordById.get(String(b.dataset.shareRecord)),b));
+  body.querySelectorAll('[data-share-excel]').forEach(b=>b.onclick=()=>shareExcelSavedRecordV1225(renderedSavedRecordById.get(String(b.dataset.shareExcel)),b));
   syncRecordSelectAll();
 }
 function syncRecordSelectAll(){
@@ -1745,28 +1746,73 @@ function makeSingleRecordShareFile(raw){
 function downloadGeneratedFile(file){
   const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
-async function shareSingleSavedRecord(raw,button=null){
-  if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
-  let file;
-  try{file=makeSingleRecordShareFile(raw);}catch(e){console.error(e);toast('Không tạo được file Excel để chia sẻ.');return false;}
-  if(!file){toast('Không tạo được file để chia sẻ.');return false;}
+function makeSingleRecordCsvShareFileV1225(raw){
+  if(!raw)return null;
+  const r=hydrateState(raw);
+  const headers=['Tên cơ sở','Loại cơ sở','Điện thoại','Địa chỉ','Số CCHND','Ngày cấp CCHND','Nơi cấp CCHND','Người PTCM','Năm cấp bằng','Trường tốt nghiệp','Số ĐĐKKDD','Ngày cấp ĐĐKKDD','Số GPP','Ngày cấp GPP'];
+  const keys=['ten_co_so','loai_co_so','dien_thoai','dia_chi','so_cchnd','ngay_cap_cchnd','noi_cap_cchnd','nguoi_ptcm','nam_cap_bang','truong_tot_nghiep','so_ddkkdd','ngay_cap_ddkkdd','so_gpp','ngay_cap_gpp'];
+  const name=r.fields.ten_co_so?.value||'Ho_So',stem=('GPP_Ho_So_'+noAccent(name).replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)).replace(/_+$/,'')||'GPP_Ho_So';
+  const date=new Date().toISOString().slice(0,10),data=[headers,keys.map(k=>r.fields[k]?.value||'')];
+  const csv=data.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  return new File(['\ufeff'+csv],`${stem}_${date}.csv`,{type:'text/csv;charset=utf-8'});
+}
+function makeRecordInfoShareFileV1225(raw){
   const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
-  const shareData={title:'Hồ sơ GPP',text:`Hồ sơ GPP - ${name}`,files:[file]};
-  const supported=!!navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}));
-  if(supported){
-    try{
-      if(button)button.disabled=true;
-      await navigator.share(shareData);
-      toast('Đã mở chia sẻ. Chọn Zalo và người/nhóm cần gửi.');
-      return true;
-    }catch(e){
-      if(e?.name==='AbortError')return false;
-      console.warn('Web Share:',e);
-    }finally{if(button)button.disabled=false;}
-  }
-  downloadGeneratedFile(file);
-  toast('Trình duyệt chưa hỗ trợ chia sẻ file trực tiếp. Đã tải file Excel xuống.');
+  const lines=[`Tên cơ sở: ${name}`,`Ban hành: ${r.banHanh?.value||''}`,`Ngày chia sẻ: ${new Date().toLocaleString('vi-VN')}`,`Số ảnh: ${recordImageEntriesV1223(raw).length}`].join('\r\n');
+  return new File([lines],'THONG_TIN_HO_SO.txt',{type:'text/plain;charset=utf-8'});
+}
+function makeRecordImageShareFilesV1225(raw){
+  return recordImageEntriesV1223(raw).map(({key,doc,blob})=>{
+    const ext=imageExtensionV1223(blob,doc?.name);
+    return new File([blob],`${DOC_FILE_LABELS_V1223[key]||key}.${ext}`,{type:blob.type||'image/jpeg'});
+  });
+}
+function canShareFilesV1225(files){
+  if(!navigator.share||!files?.length)return false;
+  try{return !navigator.canShare||navigator.canShare({files});}catch(_){return false;}
+}
+async function invokeShareV1225(files,title,textValue,button,successText){
+  if(!canShareFilesV1225(files))return false;
+  try{
+    if(button)button.disabled=true;
+    await navigator.share({title,text:textValue,files});
+    toast(successText||'Đã mở bảng chia sẻ.');
+    return true;
+  }catch(e){
+    if(e?.name==='AbortError')return true;
+    console.warn('Web Share:',e);
+    return false;
+  }finally{if(button)button.disabled=false;}
+}
+async function shareExcelSavedRecordV1225(raw,button=null){
+  if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
+  const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
+  let excel=null,csv=null;
+  try{excel=makeSingleRecordShareFile(raw);csv=makeSingleRecordCsvShareFileV1225(raw);}catch(e){console.error(e);toast('Không tạo được dữ liệu để chia sẻ.');return false;}
+  if(excel&&await invokeShareV1225([excel],'Hồ sơ GPP',`Excel hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ Excel.'))return true;
+  if(csv&&await invokeShareV1225([csv],'Hồ sơ GPP',`Dữ liệu hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ. File CSV có thể mở bằng Excel.'))return true;
+  if(excel)downloadGeneratedFile(excel);else if(csv)downloadGeneratedFile(csv);
+  toast('Thiết bị chưa cho chia sẻ file trực tiếp. Đã tải file xuống để bạn chia sẻ từ Tải xuống.');
   return false;
+}
+async function shareWholeSavedRecordV1225(raw,button=null){
+  if(!raw){toast('Không tìm thấy hồ sơ để chia sẻ.');return false;}
+  const r=hydrateState(raw),name=r.fields.ten_co_so?.value||'Hồ sơ GPP';
+  let excel=null,csv=null,info=null,images=[];
+  try{
+    excel=makeSingleRecordShareFile(raw);
+    csv=makeSingleRecordCsvShareFileV1225(raw);
+    info=makeRecordInfoShareFileV1225(raw);
+    images=makeRecordImageShareFilesV1225(raw);
+  }catch(e){console.error(e);toast('Không chuẩn bị được hồ sơ để chia sẻ.');return false;}
+  // Ưu tiên đúng Excel + toàn bộ ảnh. Nếu trình duyệt từ chối XLSX thì dùng CSV tương thích Excel.
+  const fullExcel=[excel,...images,info].filter(Boolean);
+  if(await invokeShareV1225(fullExcel,'Hồ sơ GPP',`Toàn bộ hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ toàn bộ hồ sơ.'))return true;
+  const compatible=[csv,...images,info].filter(Boolean);
+  if(await invokeShareV1225(compatible,'Hồ sơ GPP',`Toàn bộ hồ sơ GPP - ${name}`,button,'Đã mở bảng chia sẻ toàn bộ hồ sơ.'))return true;
+  // Nếu Web Share không nhận nhiều file, tải ZIP lưu trữ để người dùng chia sẻ từ ứng dụng Tệp.
+  toast('Đang tạo gói hồ sơ để lưu/chia sẻ...');
+  return downloadRecordPackageV1223(raw.id,button);
 }
 
 async function exportExcel(){return exportRecordsToExcel(await allRecords(),'GPP_Data_Entry');}
